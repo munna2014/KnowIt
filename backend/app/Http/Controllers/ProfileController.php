@@ -27,6 +27,7 @@ class ProfileController extends Controller
             'gender' => ['nullable', 'string', 'max:50'],
             'birthday' => ['nullable', 'date'],
             'avatar_url' => ['nullable', 'url'],
+            'bio' => ['nullable', 'string', 'max:1000'],
         ]);
 
         $name = $validated['name'] ?? trim(($validated['first_name'] ?? '').' '.($validated['last_name'] ?? ''));
@@ -42,6 +43,7 @@ class ProfileController extends Controller
             'phone' => $validated['phone'] ?? $user->phone,
             'gender' => $validated['gender'] ?? $user->gender,
             'birthday' => $validated['birthday'] ?? $user->birthday,
+            'bio' => $validated['bio'] ?? $user->bio,
         ]);
 
         // Handle avatar URL input (if user pastes a URL)

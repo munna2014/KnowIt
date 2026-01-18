@@ -24,6 +24,7 @@ class TestUserSeeder extends Seeder
                 'email' => $email,
                 'password' => Hash::make('password123'), // Default password
                 'email_verified_at' => now(),
+                'bio' => 'A passionate writer and developer who loves sharing insights about technology, life, and everything in between. Always curious and eager to learn new things.',
             ]);
             
             $this->command->info("Test user created: {$email} / password123");

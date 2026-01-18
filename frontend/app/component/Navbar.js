@@ -1,22 +1,35 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { useRouter, usePathname } from "next/navigation";
 import { apiRequest, clearAuthToken, getAuthUser } from "../lib/api";
 
 const navItems = ["Home", "My Blogs", "Networks", "Notification"];
+
+const resolveAvatarUrl = (url) => {
+  if (!url) return "";
+  if (url.startsWith("http") || url.startsWith("blob:") || url.startsWith("data:")) {
+    return url;
+  }
+  return `http://localhost:8000${url}`;
+};
 
 export default function Navbar() {
   const [activeItem, setActiveItem] = useState(navItems[0]);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [user, setUser] = useState(null);
+  const [isMounted, setIsMounted] = useState(false);
+  const mountedRef = useRef(true);
   const router = useRouter();
+  const pathname = usePathname();
 
   const handleNavClick = (item) => {
     setActiveItem(item);
 
     if (item === "Home") {
       router.push("/component/landing");
+    } else if (item === "My Blogs") {
+      router.push("/component/my-blogs");
     }
   };
 
@@ -24,10 +37,31 @@ export default function Navbar() {
     router.push("/component/profile");
   };
 
-  const loadUser = () => {
+  const loadUser = useCallback(() => {
     const currentUser = getAuthUser();
+    console.log("Loading user in navbar:", currentUser?.email);
     setUser(currentUser);
-  };
+  }, []);
+
+  const updateActiveItemFromPath = useCallback(() => {
+    if (!pathname) return;
+    
+    if (pathname.includes('/component/landing') || pathname === '/') {
+      setActiveItem("Home");
+    } else if (
+      pathname.includes('/component/my-blogs') || 
+      pathname.includes('/component/create-blog') || 
+      pathname.includes('/component/edit-blog') ||
+      pathname.includes('/component/blog/')
+    ) {
+      setActiveItem("My Blogs");
+    } else if (pathname.includes('/component/networks')) {
+      setActiveItem("Networks");
+    } else if (pathname.includes('/component/notification')) {
+      setActiveItem("Notification");
+    }
+    // If none match, keep the current active item
+  }, [pathname]);
 
   const getUserInitials = (currentUser) => {
     if (!currentUser) return "NR";
@@ -40,7 +74,15 @@ export default function Navbar() {
   };
 
   const getUserAvatar = (currentUser) => {
-    return currentUser?.avatar_url || null;
+    if (!currentUser?.avatar_url) return null;
+    
+    // If it's already a full URL, return as-is
+    if (currentUser.avatar_url.startsWith('http')) {
+      return currentUser.avatar_url;
+    }
+    
+    // If it's a relative path, construct full URL
+    return `http://localhost:8000${currentUser.avatar_url}`;
   };
 
   const handleSignOut = async () => {
@@ -59,25 +101,37 @@ export default function Navbar() {
   };
 
   useEffect(() => {
+    mountedRef.current = true;
+    setIsMounted(true);
     loadUser();
+    updateActiveItemFromPath(); // Set active item based on current route
 
     const handleStorageChange = () => {
-      loadUser();
+      if (mountedRef.current) {
+        loadUser();
+      }
+    };
+
+    const handleUserUpdate = () => {
+      if (mountedRef.current) {
+        loadUser();
+      }
     };
 
     window.addEventListener("storage", handleStorageChange);
-
-    const handleUserUpdate = () => {
-      loadUser();
-    };
-
     window.addEventListener("userUpdated", handleUserUpdate);
 
     return () => {
+      mountedRef.current = false;
       window.removeEventListener("storage", handleStorageChange);
       window.removeEventListener("userUpdated", handleUserUpdate);
     };
-  }, []);
+  }, [loadUser, updateActiveItemFromPath]);
+
+  // Update active item when pathname changes
+  useEffect(() => {
+    updateActiveItemFromPath();
+  }, [pathname, updateActiveItemFromPath]);
 
   return (
     <nav className="fixed inset-x-0 top-0 z-50 grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border border-slate-200/80 border-x-0 bg-white/95 px-6 py-2.5 shadow-[0_12px_30px_-24px_rgba(15,23,42,0.45)]">
@@ -146,23 +200,14 @@ export default function Navbar() {
         </div>
         <details className="relative">
           <summary className="list-none flex h-9 w-9 cursor-pointer items-center justify-center rounded-full overflow-hidden bg-emerald-600 text-xs font-semibold text-white">
-            {getUserAvatar(user) ? (
+            {isMounted && getUserAvatar(user) ? (
               <img
-                src={getUserAvatar(user)}
+                src={resolveAvatarUrl(getUserAvatar(user))}
                 alt="Profile"
                 className="h-full w-full object-cover"
                 onError={(e) => {
-                  const avatarUrl = getUserAvatar(user);
-                  if (!avatarUrl) {
-                    e.target.style.display = "none";
-                    return;
-                  }
-                  if (!avatarUrl.startsWith("http")) {
-                    e.target.src = `http://localhost:8000${avatarUrl}`;
-                  } else {
-                    e.target.style.display = "none";
-                    e.target.parentElement.innerHTML = getUserInitials(user);
-                  }
+                  e.target.style.display = "none";
+                  e.target.parentElement.innerHTML = getUserInitials(user);
                 }}
               />
             ) : (
