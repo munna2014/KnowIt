@@ -6,11 +6,12 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, Notifiable;
 
     /**
      * The attributes that are mass assignable.
@@ -19,9 +20,30 @@ class User extends Authenticatable
      */
     protected $fillable = [
         'name',
+        'first_name',
+        'last_name',
         'email',
+        'phone',
         'password',
+        'birthday',
+        'gender',
+        'avatar_url',
+        'avatar_path',
     ];
+
+    /**
+     * Get the avatar URL attribute.
+     */
+    public function getAvatarUrlAttribute()
+    {
+        if (!empty($this->attributes['avatar_url'])) {
+            return $this->attributes['avatar_url'];
+        }
+        if ($this->avatar_path) {
+            return url(\Illuminate\Support\Facades\Storage::url($this->avatar_path));
+        }
+        return null;
+    }
 
     /**
      * The attributes that should be hidden for serialization.
@@ -43,6 +65,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'birthday' => 'date',
         ];
     }
 }
