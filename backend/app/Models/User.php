@@ -29,6 +29,7 @@ class User extends Authenticatable
         'gender',
         'avatar_url',
         'avatar_path',
+        'bio',
     ];
 
     /**

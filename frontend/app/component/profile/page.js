@@ -20,6 +20,14 @@ const genderOptions = [
   { value: "prefer_not_to_say", label: "Prefer not to say" },
 ];
 
+const resolveAvatarUrl = (url) => {
+  if (!url) return "";
+  if (url.startsWith("http") || url.startsWith("blob:") || url.startsWith("data:")) {
+    return url;
+  }
+  return `http://localhost:8000${url}`;
+};
+
 export default function ProfilePage() {
   const router = useRouter();
   const [form, setForm] = useState({
@@ -30,6 +38,7 @@ export default function ProfilePage() {
     gender: "",
     birthday: "",
     avatarUrl: "",
+    bio: "",
   });
   const [avatarPreview, setAvatarPreview] = useState("");
   const [avatarFile, setAvatarFile] = useState(null);
@@ -38,74 +47,54 @@ export default function ProfilePage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [isDragOver, setIsDragOver] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const fileInputRef = useRef(null);
   const dropZoneRef = useRef(null);
+  const mountedRef = useRef(true);
 
   useEffect(() => {
-    const user = getAuthUser();
-    const token = getAuthToken();
+    mountedRef.current = true;
     
-    // If no user or token, redirect to login
-    if (!user || !token) {
-      router.push("/component/login");
-      return;
-    }
-    
-    // Load user data into form
-    setForm((current) => ({
-      ...current,
-      firstName: user.first_name || "",
-      lastName: user.last_name || "",
-      email: user.email || "",
-      phone: user.phone || "",
-      gender: user.gender || "",
-      birthday: user.birthday || "",
-      avatarUrl: user.avatar_url || "",
-    }));
-    
-    // Debug: Log the avatar URL
-    console.log("User avatar URL from localStorage:", user.avatar_url);
-    setAvatarPreview(user.avatar_url || "");
-
-    // Try to refresh profile data from server
-    const loadProfile = async () => {
-      try {
-        const data = await apiRequest("profile");
-        if (data?.user) {
-          console.log("Fresh user data from server:", data.user);
-          console.log("Fresh avatar URL:", data.user.avatar_url);
-          
-          saveAuthUser(data.user);
-          setForm((current) => ({
-            ...current,
-            firstName: data.user.first_name || "",
-            lastName: data.user.last_name || "",
-            email: data.user.email || "",
-            phone: data.user.phone || "",
-            gender: data.user.gender || "",
-            birthday: data.user.birthday || "",
-            avatarUrl: data.user.avatar_url || "",
-          }));
-          setAvatarPreview(data.user.avatar_url || "");
-        }
-      } catch (err) {
-        // If profile load fails, just log it but don't redirect
-        // The user can still use the cached data and try to save
-        console.warn("Could not refresh profile data:", err.message);
-        
-        // Only redirect on 401 (unauthorized) errors
-        if (err.status === 401) {
-          console.log("Token expired, redirecting to login");
-          clearAuthToken();
+    const initializeProfile = () => {
+      const user = getAuthUser();
+      const token = getAuthToken();
+      
+      // If no user or token, redirect to login
+      if (!user || !token) {
+        if (mountedRef.current) {
           router.push("/component/login");
         }
+        return;
+      }
+      
+      // Load user data into form from localStorage
+      if (mountedRef.current) {
+        setForm({
+          firstName: user.first_name || "",
+          lastName: user.last_name || "",
+          email: user.email || "",
+          phone: user.phone || "",
+          gender: user.gender || "",
+          birthday: user.birthday || "",
+          avatarUrl: user.avatar_url || "",
+          bio: user.bio || "",
+        });
+        
+        // Set avatar preview if available
+        if (user.avatar_url) {
+          console.log("Setting avatar preview from localStorage:", user.avatar_url);
+          setAvatarPreview(user.avatar_url);
+        }
+        
+        setIsLoading(false);
       }
     };
 
-    // Only try to load profile if we have valid auth
-    if (user && token) {
-      loadProfile();
-    }
+    initializeProfile();
+    
+    return () => {
+      mountedRef.current = false;
+    };
   }, [router]);
 
   const handleChange = useCallback((event) => {
@@ -276,6 +265,7 @@ export default function ProfilePage() {
         gender: form.gender || undefined,
         birthday: form.birthday || undefined,
         avatar_url: form.avatarUrl?.trim() || undefined,
+        bio: form.bio?.trim() || undefined,
       };
 
       const data = await apiRequest("profile", {
@@ -336,6 +326,24 @@ export default function ProfilePage() {
     return "U";
   }, [form.firstName, form.lastName, form.email]);
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-black">
+        <Navbar />
+        <div className="pt-16">
+          <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+            <div className="flex items-center justify-center min-h-[400px]">
+              <div className="text-center">
+                <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-emerald-500 border-r-transparent"></div>
+                <p className="mt-4 text-slate-300">Loading profile...</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-black">
       <Navbar />
@@ -390,23 +398,11 @@ export default function ProfilePage() {
                     <div className="h-64 w-64 overflow-hidden rounded-3xl bg-slate-800 ring-4 ring-slate-600/50 shadow-2xl">
                       {avatarPreview ? (
                         <img
-                          src={avatarPreview}
+                          src={resolveAvatarUrl(avatarPreview)}
                           alt="Profile preview"
                           className="h-full w-full object-cover"
                           onError={(e) => {
-                            console.error("Image failed to load:", avatarPreview);
-                            // Try to construct a full URL if it's a relative path
-                            if (!avatarPreview.startsWith('http')) {
-                              const fullUrl = `http://localhost:8000${avatarPreview}`;
-                              console.log("Trying full URL:", fullUrl);
-                              e.target.src = fullUrl;
-                            } else {
-                              // If it's already a full URL and still fails, show initials
-                              setAvatarPreview("");
-                            }
-                          }}
-                          onLoad={() => {
-                            console.log("Image loaded successfully:", avatarPreview);
+                            setAvatarPreview("");
                           }}
                         />
                       ) : (
@@ -634,35 +630,82 @@ export default function ProfilePage() {
                 </div>
               </div>
 
-              <div className="mt-10 flex justify-end gap-4">
+              {/* Bio Section - Full Width */}
+              <div className="mt-8">
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Bio
+                </label>
+                <textarea
+                  name="bio"
+                  value={form.bio}
+                  onChange={handleChange}
+                  rows={4}
+                  className="block w-full rounded-lg border border-slate-600 bg-slate-800/50 px-4 py-3 text-slate-200 placeholder-slate-500 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                  placeholder="Tell us about yourself... (optional)"
+                />
+                <p className="mt-2 text-xs text-slate-400">
+                  This will be displayed on your blog posts. Maximum 1000 characters.
+                </p>
+              </div>
+
+              <div className="mt-10 flex justify-between items-center gap-4">
                 <button
                   type="button"
                   onClick={() => window.location.reload()}
-                  className="rounded-lg border border-slate-600 bg-slate-800/50 px-6 py-3 text-sm font-medium text-slate-200 shadow-sm transition-colors hover:bg-slate-700"
+                  className="inline-flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-800/50 px-4 py-3 text-sm font-medium text-slate-200 shadow-sm transition-colors hover:bg-slate-700"
                 >
-                  Cancel
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Refresh Page
                 </button>
-                <button
-                  type="submit"
-                  disabled={isSaving}
-                  className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-6 py-3 text-sm font-medium text-white shadow-lg shadow-emerald-600/30 transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {isSaving ? (
-                    <>
-                      <svg className="h-4 w-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                      </svg>
-                      Saving...
-                    </>
-                  ) : (
-                    <>
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                      Save Changes
-                    </>
-                  )}
-                </button>
+                
+                <div className="flex gap-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const user = getAuthUser();
+                      if (user) {
+                        setForm({
+                          firstName: user.first_name || "",
+                          lastName: user.last_name || "",
+                          email: user.email || "",
+                          phone: user.phone || "",
+                          gender: user.gender || "",
+                          birthday: user.birthday || "",
+                          avatarUrl: user.avatar_url || "",
+                          bio: user.bio || "",
+                        });
+                        setAvatarPreview(user.avatar_url || "");
+                        setSuccess("Form reset to saved values!");
+                      }
+                    }}
+                    className="rounded-lg border border-slate-600 bg-slate-800/50 px-6 py-3 text-sm font-medium text-slate-200 shadow-sm transition-colors hover:bg-slate-700"
+                  >
+                    Reset
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSaving}
+                    className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-6 py-3 text-sm font-medium text-white shadow-lg shadow-emerald-600/30 transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isSaving ? (
+                      <>
+                        <svg className="h-4 w-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        Save Changes
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </form>
           </div>
