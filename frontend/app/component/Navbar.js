@@ -1,15 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiRequest, clearAuthToken, getAuthUser } from "../lib/api";
 
 const navItems = ["Home", "My Blogs", "Networks", "Notification"];
 
 export default function Navbar() {
   const [activeItem, setActiveItem] = useState(navItems[0]);
-  const [isSigningOut, setIsSigningOut] = useState(false);
-  const [user, setUser] = useState(null);
   const router = useRouter();
 
   const handleNavClick = (item) => {
@@ -19,67 +16,6 @@ export default function Navbar() {
       router.push("/component/landing");
     }
   };
-
-  const handleProfile = () => {
-    router.push("/component/profile");
-  };
-
-  const loadUser = () => {
-    const currentUser = getAuthUser();
-    setUser(currentUser);
-  };
-
-  const getUserInitials = (user) => {
-    if (!user) return "NR";
-    const rawName = user.name || user.email || "";
-    const parts = rawName.trim().split(/\s+/).filter(Boolean);
-    if (parts.length === 0) return "NR";
-    const first = parts[0]?.[0] || "";
-    const second = parts.length > 1 ? parts[1]?.[0] : parts[0]?.[1] || "";
-    return (first + second).toUpperCase();
-  };
-
-  const getUserAvatar = (user) => {
-    return user?.avatar_url || null;
-  };
-
-  const handleSignOut = async () => {
-    if (isSigningOut) return;
-    setIsSigningOut(true);
-
-    try {
-      await apiRequest("logout", { method: "POST" });
-    } catch (error) {
-      // Ignore API errors; we still clear the local token.
-    } finally {
-      clearAuthToken();
-      setIsSigningOut(false);
-      router.push("/component/login");
-    }
-  };
-
-  useEffect(() => {
-    loadUser();
-    
-    // Listen for storage changes to update user data when profile is updated
-    const handleStorageChange = () => {
-      loadUser();
-    };
-    
-    window.addEventListener('storage', handleStorageChange);
-    
-    // Also listen for a custom event when user data is updated
-    const handleUserUpdate = () => {
-      loadUser();
-    };
-    
-    window.addEventListener('userUpdated', handleUserUpdate);
-    
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('userUpdated', handleUserUpdate);
-    };
-  }, []);
 
   return (
     <nav className="fixed inset-x-0 top-0 z-50 grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border border-slate-200/80 border-x-0 bg-white/95 px-6 py-2.5 shadow-[0_12px_30px_-24px_rgba(15,23,42,0.45)]">
@@ -107,7 +43,7 @@ export default function Navbar() {
                 key={item}
                 className={`rounded-full px-4 py-2 transition ${
                   isActive
-                    ? "bg-emerald-600 text-white shadow-sm"
+                    ? "bg-slate-900 text-white shadow-sm"
                     : "text-slate-600 hover:text-slate-900"
                 }`}
                 type="button"
@@ -147,45 +83,13 @@ export default function Navbar() {
           </div>
         </div>
         <details className="relative">
-          <summary className="list-none flex h-9 w-9 cursor-pointer items-center justify-center rounded-full overflow-hidden bg-emerald-600 text-xs font-semibold text-white">
-            {getUserAvatar(user) ? (
-              <img
-                src={getUserAvatar(user)}
-                alt="Profile"
-                className="h-full w-full object-cover"
-                onError={(e) => {
-                  console.error("Navbar avatar failed to load:", getUserAvatar(user));
-                  // Try to construct a full URL if it's a relative path
-                  if (!getUserAvatar(user).startsWith('http')) {
-                    const fullUrl = `http://localhost:8000${getUserAvatar(user)}`;
-                    e.target.src = fullUrl;
-                  } else {
-                    // If it's already a full URL and still fails, hide the image
-                    e.target.style.display = 'none';
-                    e.target.parentElement.innerHTML = getUserInitials(user);
-                  }
-                }}
-              />
-            ) : (
-              getUserInitials(user)
-            )}
+          <summary className="list-none flex h-9 w-9 cursor-pointer items-center justify-center rounded-full bg-slate-900 text-xs font-semibold text-white">
+            NR
           </summary>
-          <div className="absolute right-0 z-10 mt-3 flex w-40 flex-col gap-2 rounded-2xl border border-slate-200 bg-white p-2 text-sm text-slate-600 shadow-lg">
-            <button
-              className="block w-full rounded-xl bg-slate-900 px-3 py-2 text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
-              type="button"
-              onClick={handleProfile}
-            >
-              Profile
-            </button>
-            <button
-              className="block w-full rounded-xl bg-slate-900 px-3 py-2 text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
-              type="button"
-              onClick={handleSignOut}
-              disabled={isSigningOut}
-            >
-              {isSigningOut ? "Signing out..." : "Sign out"}
-            </button>
+          <div className="absolute right-0 z-10 mt-3 w-40 rounded-2xl border border-slate-200 bg-white p-2 text-sm text-slate-600 shadow-lg">
+            <a className="block rounded-xl bg-slate-900 px-3 py-2 text-white" href="#">
+              Sign out
+            </a>
           </div>
         </details>
       </div>
