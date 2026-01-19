@@ -1,52 +1,105 @@
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Navbar from "../Navbar";
 import BlogSection from "../blog/BlogSection";
+import { getAuthToken, getAuthUser } from "../../lib/api";
 
 export default function LandingPage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    // Check if user is authenticated
+    const token = getAuthToken();
+    const user = getAuthUser();
+    
+    if (!token || !user) {
+      // Redirect to login if not authenticated
+      router.push("/component/login");
+      return;
+    }
+  }, [router]);
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-      {/* Background Pattern */}
-      <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmZmZmYiIGZpbGwtb3BhY2l0eT0iMC4wMiI+PGNpcmNsZSBjeD0iMzAiIGN5PSIzMCIgcj0iMSIvPjwvZz48L2c+PC9zdmc+')] opacity-50"></div>
+    <div className="min-h-screen bg-[#0b1220]">
+      {/* Background Layers */}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(14,165,233,0.12),_transparent_55%),radial-gradient(circle_at_20%_80%,_rgba(16,185,129,0.12),_transparent_50%)]"></div>
+      <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iOTAiIGhlaWdodD0iOTAiIHZpZXdCb3g9IjAgMCA5MCA5MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmZmZmYiIGZpbGwtb3BhY2l0eT0iMC4wMiI+PGNpcmNsZSBjeD0iNDUiIGN5PSI0NSIgcj0iMSIvPjwvZz48L2c+PC9zdmc+')] opacity-60"></div>
       
       <div className="relative">
         <Navbar />
 
         {/* Hero Section */}
-        <div className="pt-32 pb-20">
+        <div className="pt-28 pb-24">
           <div className="mx-auto max-w-7xl px-6">
-            <div className="text-center">
-              <div className="mb-8">
-                <span className="inline-flex items-center rounded-full bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-400 ring-1 ring-emerald-500/20">
-                  <svg className="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
-                  Welcome to the Community
-                </span>
-              </div>
-              
-              <h1 className="text-5xl md:text-7xl font-bold text-white mb-8 leading-tight">
-                Welcome to{" "}
-                <span className="bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">
-                  KnowIt
-                </span>
-              </h1>
-              
-              <p className="text-xl md:text-2xl text-slate-300 mb-12 max-w-3xl mx-auto leading-relaxed">
-                Discover insights, share knowledge, and connect with a community of curious minds exploring the latest in technology, design, and innovation.
-              </p>
+            <div className="grid gap-12 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
+              <div>
+                <div className="mb-6">
+                  <span className="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                    Welcome to the Community
+                  </span>
+                </div>
+                
+                <h1 className="text-5xl md:text-7xl font-bold text-white leading-tight font-[var(--font-display)]">
+                  Find the signal.
+                  <span className="block bg-gradient-to-r from-emerald-300 via-cyan-300 to-sky-300 bg-clip-text text-transparent">
+                    Share the story.
+                  </span>
+                </h1>
+                
+                <p className="mt-6 text-lg md:text-xl text-slate-300 max-w-2xl leading-relaxed">
+                  Discover insights, build your voice, and connect with a community of curious minds exploring technology, design, and innovation.
+                </p>
 
-              {/* Stats */}
-              <div className="flex flex-wrap justify-center gap-8 mb-16">
-                <div className="text-center">
-                  <div className="text-3xl font-bold text-white mb-1">1.2K+</div>
-                  <div className="text-sm text-slate-400">Articles</div>
+                <div className="mt-10 grid grid-cols-2 gap-4 sm:grid-cols-3">
+                  {[
+                    { label: "Articles", value: "1.2K+" },
+                    { label: "Readers", value: "5.8K+" },
+                    { label: "Authors", value: "150+" },
+                  ].map((stat) => (
+                    <div
+                      key={stat.label}
+                      className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 text-left shadow-[0_20px_40px_-30px_rgba(15,23,42,0.8)] backdrop-blur"
+                    >
+                      <div className="text-2xl font-semibold text-white">{stat.value}</div>
+                      <div className="mt-1 text-xs uppercase tracking-[0.2em] text-slate-400">
+                        {stat.label}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <div className="text-center">
-                  <div className="text-3xl font-bold text-white mb-1">5.8K+</div>
-                  <div className="text-sm text-slate-400">Readers</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-3xl font-bold text-white mb-1">150+</div>
-                  <div className="text-sm text-slate-400">Authors</div>
+              </div>
+
+              <div className="relative">
+                <div className="absolute -left-6 top-10 h-32 w-32 rounded-full bg-emerald-400/20 blur-2xl"></div>
+                <div className="absolute -right-8 bottom-8 h-36 w-36 rounded-full bg-sky-400/20 blur-2xl"></div>
+                <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-slate-900/80 via-slate-900/60 to-slate-800/80 p-8 shadow-[0_30px_70px_-40px_rgba(15,23,42,0.85)] backdrop-blur">
+                  <div className="flex items-center justify-between text-xs uppercase tracking-[0.3em] text-slate-400">
+                    <span>Trending Topics</span>
+                    <span>Live</span>
+                  </div>
+                  <div className="mt-6 space-y-4">
+                    {[
+                      { title: "Future of AI Interfaces", tag: "Design" },
+                      { title: "React Server Patterns", tag: "Dev" },
+                      { title: "Community Growth Loops", tag: "Product" },
+                    ].map((item) => (
+                      <div
+                        key={item.title}
+                        className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4"
+                      >
+                        <div className="text-sm text-emerald-300">{item.tag}</div>
+                        <div className="mt-2 text-lg font-semibold text-white">{item.title}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-6 rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
+                    New posts are landing every day. Stay close to the momentum.
+                  </div>
                 </div>
               </div>
             </div>
@@ -57,35 +110,11 @@ export default function LandingPage() {
         <div className="pb-20">
           <div className="mx-auto max-w-7xl px-6">
             <div className="mb-12">
-              <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">Latest Posts</h2>
+              <h2 className="text-3xl md:text-4xl font-bold text-white mb-4 font-[var(--font-display)]">Latest Posts</h2>
               <p className="text-lg text-slate-400">Stay updated with our latest insights and discoveries</p>
             </div>
             
             <BlogSection />
-          </div>
-        </div>
-
-        {/* Newsletter Section */}
-        <div className="py-20 border-t border-slate-700/50">
-          <div className="mx-auto max-w-4xl px-6 text-center">
-            <div className="rounded-2xl bg-gradient-to-r from-emerald-500/10 to-cyan-500/10 p-12 ring-1 ring-emerald-500/20">
-              <h3 className="text-3xl font-bold text-white mb-4">
-                Stay in the Loop
-              </h3>
-              <p className="text-lg text-slate-300 mb-8">
-                Get the latest articles and insights delivered straight to your inbox. No spam, just quality content.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-4 max-w-md mx-auto">
-                <input
-                  type="email"
-                  placeholder="Enter your email"
-                  className="flex-1 rounded-lg bg-slate-800/50 border border-slate-600 px-4 py-3 text-white placeholder-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-                />
-                <button className="rounded-lg bg-gradient-to-r from-emerald-500 to-cyan-500 px-6 py-3 font-medium text-white shadow-lg hover:shadow-emerald-500/25 transition-all duration-200 hover:scale-105">
-                  Subscribe
-                </button>
-              </div>
-            </div>
           </div>
         </div>
 

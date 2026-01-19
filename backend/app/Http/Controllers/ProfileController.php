@@ -9,14 +9,22 @@ class ProfileController extends Controller
 {
     public function show(Request $request)
     {
+        $user = $request->user();
+        
+        // Debug: Log user data being returned
+        \Log::info('Profile show - returning user data:', $user->toArray());
+        
         return response()->json([
-            'user' => $request->user(),
+            'user' => $user,
         ]);
     }
 
     public function update(Request $request)
     {
         $user = $request->user();
+
+        // Debug: Log incoming request data
+        \Log::info('Profile update request data:', $request->all());
 
         $validated = $request->validate([
             'name' => ['nullable', 'string', 'max:255'],
@@ -30,12 +38,15 @@ class ProfileController extends Controller
             'bio' => ['nullable', 'string', 'max:1000'],
         ]);
 
+        // Debug: Log validated data
+        \Log::info('Profile update validated data:', $validated);
+
         $name = $validated['name'] ?? trim(($validated['first_name'] ?? '').' '.($validated['last_name'] ?? ''));
         if ($name === '') {
             $name = $user->name;
         }
 
-        $user->fill([
+        $updateData = [
             'name' => $name,
             'first_name' => $validated['first_name'] ?? $user->first_name,
             'last_name' => $validated['last_name'] ?? $user->last_name,
@@ -44,10 +55,16 @@ class ProfileController extends Controller
             'gender' => $validated['gender'] ?? $user->gender,
             'birthday' => $validated['birthday'] ?? $user->birthday,
             'bio' => $validated['bio'] ?? $user->bio,
-        ]);
+            // Note: avatar_url is handled separately below to preserve existing avatars
+        ];
+
+        // Debug: Log data being saved
+        \Log::info('Profile update data being saved:', $updateData);
+
+        $user->fill($updateData);
 
         // Handle avatar URL input (if user pastes a URL)
-        if (array_key_exists('avatar_url', $validated) && $validated['avatar_url']) {
+        if (array_key_exists('avatar_url', $validated) && !empty($validated['avatar_url'])) {
             // If user provides an external URL, clear the local file
             if ($user->avatar_path) {
                 Storage::disk('public')->delete($user->avatar_path);
@@ -55,8 +72,13 @@ class ProfileController extends Controller
             }
             $user->avatar_url = $validated['avatar_url'];
         }
+        // Important: Don't modify avatar fields if avatar_url is not provided or is empty
+        // This preserves existing avatar_path and avatar_url when updating other profile fields
 
         $user->save();
+
+        // Debug: Log saved user data
+        \Log::info('Profile update - user saved:', $user->toArray());
 
         return response()->json([
             'user' => $user,

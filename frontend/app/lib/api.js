@@ -109,19 +109,22 @@ export async function apiRequest(path, options = {}) {
     headers: requestHeaders,
     body: data ? (isFormData ? data : JSON.stringify(data)) : undefined,
   }).then(async (response) => {
-    const text = await response.text();
+    let text = "";
     let payload = null;
-    if (text) {
-      try {
+    
+    try {
+      text = await response.text();
+      if (text) {
         payload = JSON.parse(text);
-      } catch (error) {
-        payload = { message: text };
       }
+    } catch (parseError) {
+      console.warn("Failed to parse response:", parseError);
+      payload = { message: text || "Invalid response format" };
     }
 
     if (!response.ok) {
       const message =
-        payload?.message || payload?.error || "Request failed. Try again.";
+        payload?.message || payload?.error || `HTTP ${response.status}: ${response.statusText}`;
       const error = new Error(message);
       error.status = response.status;
       error.payload = payload;
@@ -140,7 +143,17 @@ export async function apiRequest(path, options = {}) {
     if (requestCache.has(cacheKey)) {
       requestCache.delete(cacheKey);
     }
-    throw error;
+    
+    // If it's already our custom error, just re-throw it
+    if (error.status) {
+      throw error;
+    }
+    
+    // Handle network errors or other fetch errors
+    const networkError = new Error(error.message || "Network error occurred");
+    networkError.status = 0;
+    networkError.payload = null;
+    throw networkError;
   });
 
   // Cache GET requests
