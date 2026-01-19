@@ -21,6 +21,33 @@ export default function BlogSection() {
   const [error, setError] = useState("");
   const [likingPosts, setLikingPosts] = useState(new Set());
 
+  const loadLikeStatuses = async (posts) => {
+    const token = getAuthToken();
+    if (!token || !posts.length) return posts;
+
+    try {
+      const postsWithLikes = await Promise.all(
+        posts.map(async (post) => {
+          try {
+            const data = await apiRequest(`blog-posts/${post.slug}/like-status`);
+            return {
+              ...post,
+              user_liked: Boolean(data?.liked),
+              post_likes_count: data?.likes_count ?? post.post_likes_count
+            };
+          } catch (err) {
+            console.error(`Error loading like status for ${post.slug}:`, err);
+            return { ...post, user_liked: false };
+          }
+        })
+      );
+      return postsWithLikes;
+    } catch (err) {
+      console.error("Error loading like statuses:", err);
+      return posts;
+    }
+  };
+
   const loadPosts = useCallback(async () => {
     try {
       setIsLoading(true);
@@ -116,33 +143,6 @@ export default function BlogSection() {
           : p
       )
     );
-  };
-
-  const loadLikeStatuses = async (posts) => {
-    const token = getAuthToken();
-    if (!token || !posts.length) return posts;
-
-    try {
-      const postsWithLikes = await Promise.all(
-        posts.map(async (post) => {
-          try {
-            const data = await apiRequest(`blog-posts/${post.slug}/like-status`);
-            return {
-              ...post,
-              user_liked: Boolean(data?.liked),
-              post_likes_count: data?.likes_count ?? post.post_likes_count
-            };
-          } catch (err) {
-            console.error(`Error loading like status for ${post.slug}:`, err);
-            return { ...post, user_liked: false };
-          }
-        })
-      );
-      return postsWithLikes;
-    } catch (err) {
-      console.error("Error loading like statuses:", err);
-      return posts;
-    }
   };
 
   if (isLoading) {
@@ -248,7 +248,7 @@ export default function BlogSection() {
                         </div>
                       </div>
                       
-                      <div className="flex items-center gap-6 text-sm text-slate-300/70">
+                      <div className="relative flex items-center gap-6 text-sm text-slate-300/70">
                         <span className="flex items-center gap-2">
                           <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />

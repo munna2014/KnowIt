@@ -102,7 +102,7 @@ export default function QuickComment({ post, onCommentAdded }) {
           Quick comment
         </button>
       ) : (
-        <div className="absolute bottom-full right-0 mb-2 w-80 bg-slate-800 border border-slate-600 rounded-lg shadow-xl z-10">
+        <div className="absolute bottom-full right-0 mb-2 w-80 bg-slate-800 border border-slate-600 rounded-lg shadow-xl z-50">
           <form onSubmit={handleSubmit} className="p-4">
             <div className="flex items-start gap-3 mb-3">
               <div className="h-8 w-8 overflow-hidden rounded-full bg-emerald-600 flex items-center justify-center text-white font-semibold text-xs flex-shrink-0">
