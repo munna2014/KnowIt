@@ -2,7 +2,9 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { apiRequest } from "../../lib/api";
+import { useRouter } from "next/navigation";
+import { apiRequest, getAuthToken, getAuthUser } from "../../lib/api";
+import QuickComment from "./QuickComment";
 
 const resolveAvatarUrl = (url) => {
   if (!url) return "";
@@ -13,9 +15,11 @@ const resolveAvatarUrl = (url) => {
 };
 
 export default function BlogSection() {
+  const router = useRouter();
   const [posts, setPosts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [likingPosts, setLikingPosts] = useState(new Set());
 
   const loadPosts = useCallback(async () => {
     try {
@@ -24,7 +28,11 @@ export default function BlogSection() {
       
       // Load published posts only
       const data = await apiRequest("blog-posts?status=published");
-      setPosts(data.posts || []);
+      const posts = data.posts || [];
+      
+      // Load like statuses for authenticated users
+      const postsWithLikes = await loadLikeStatuses(posts);
+      setPosts(postsWithLikes);
     } catch (err) {
       console.error("Error loading posts:", err);
       setError("Could not load blog posts.");
@@ -56,6 +64,85 @@ export default function BlogSection() {
       return name.substring(0, 2).toUpperCase();
     }
     return "U";
+  };
+
+  const handleLikeToggle = async (event, post) => {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    const token = getAuthToken();
+    if (!token) {
+      router.push("/component/login");
+      return;
+    }
+
+    if (likingPosts.has(post.id)) return;
+
+    try {
+      setLikingPosts(prev => new Set([...prev, post.id]));
+      
+      const data = await apiRequest(`blog-posts/${post.slug}/like`, { 
+        method: "POST" 
+      });
+      
+      // Update the post in the posts array
+      setPosts(prevPosts => 
+        prevPosts.map(p => 
+          p.id === post.id 
+            ? { 
+                ...p, 
+                post_likes_count: data?.likes_count ?? p.post_likes_count,
+                user_liked: Boolean(data?.liked)
+              }
+            : p
+        )
+      );
+    } catch (err) {
+      console.error("Error toggling like:", err);
+    } finally {
+      setLikingPosts(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(post.id);
+        return newSet;
+      });
+    }
+  };
+
+  const handleCommentAdded = (postId, comment) => {
+    setPosts(prevPosts => 
+      prevPosts.map(p => 
+        p.id === postId 
+          ? { ...p, comments_count: (p.comments_count || 0) + 1 }
+          : p
+      )
+    );
+  };
+
+  const loadLikeStatuses = async (posts) => {
+    const token = getAuthToken();
+    if (!token || !posts.length) return posts;
+
+    try {
+      const postsWithLikes = await Promise.all(
+        posts.map(async (post) => {
+          try {
+            const data = await apiRequest(`blog-posts/${post.slug}/like-status`);
+            return {
+              ...post,
+              user_liked: Boolean(data?.liked),
+              post_likes_count: data?.likes_count ?? post.post_likes_count
+            };
+          } catch (err) {
+            console.error(`Error loading like status for ${post.slug}:`, err);
+            return { ...post, user_liked: false };
+          }
+        })
+      );
+      return postsWithLikes;
+    } catch (err) {
+      console.error("Error loading like statuses:", err);
+      return posts;
+    }
   };
 
   if (isLoading) {
@@ -90,14 +177,13 @@ export default function BlogSection() {
       {/* Modern Blog Grid - All Cards Same Size */}
       {posts.length > 0 ? (
         <div>
-          <h2 className="mb-8 text-2xl font-bold text-white">Latest Posts</h2>
-          <div className="space-y-8">
+          <div className="space-y-16">
             {posts.slice(0, 6).map((post) => (
               <Link key={post.id} href={`/component/blog/${post.slug}`}>
-                <article className="group flex flex-col lg:flex-row gap-8 p-8 rounded-2xl bg-slate-800/30 border border-slate-700/30 hover:bg-slate-800/50 hover:border-slate-600/50 transition-all duration-300 backdrop-blur-sm">
+                <article className="group flex m-6 min-h-[18rem] flex-col gap-10 rounded-2xl border border-slate-700/40 bg-gradient-to-br from-slate-900/80 via-slate-900/60 to-slate-800/80 p-10 shadow-[0_20px_60px_-30px_rgba(15,23,42,0.85)] transition-all duration-300 hover:border-emerald-500/30 hover:bg-slate-900/80 lg:flex-row">
                   {/* Featured Image */}
                   {post.featured_image_url && (
-                    <div className="lg:w-80 lg:h-48 w-full h-48 overflow-hidden rounded-xl flex-shrink-0">
+                    <div className="h-58 w-full  flex-shrink-0 overflow-hidden  rounded-xl lg:h-65 lg:w-96">
                       <img
                         src={post.featured_image_url}
                         alt={post.title}
@@ -118,19 +204,19 @@ export default function BlogSection() {
                             {post.category}
                           </span>
                         )}
-                        <span className="text-slate-400">
+                        <span className="text-slate-300/80">
                           {formatDate(post.published_at || post.created_at)}
                         </span>
                       </div>
 
                       {/* Title */}
-                      <h2 className="mb-4 text-2xl md:text-3xl font-bold text-white group-hover:text-emerald-300 transition-colors leading-tight">
+                      <h2 className="mb-4 text-2xl md:text-3xl font-bold text-white transition-colors leading-tight group-hover:text-emerald-300">
                         {post.title}
                       </h2>
 
                       {/* Excerpt */}
                       {post.excerpt && (
-                        <p className="mb-6 text-slate-300 leading-relaxed line-clamp-2">
+                        <p className="mb-6 text-slate-300/90 leading-relaxed line-clamp-2">
                           {post.excerpt}
                         </p>
                       )}
@@ -162,7 +248,7 @@ export default function BlogSection() {
                         </div>
                       </div>
                       
-                      <div className="flex items-center gap-6 text-sm text-slate-400">
+                      <div className="flex items-center gap-6 text-sm text-slate-300/70">
                         <span className="flex items-center gap-2">
                           <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -170,12 +256,39 @@ export default function BlogSection() {
                           </svg>
                           {post.views_count || 0} views
                         </span>
-                        <span className="flex items-center gap-2">
+                        <Link 
+                          href={`/component/blog/${post.slug}#comments`}
+                          className="flex items-center gap-2 hover:text-emerald-300 transition-colors"
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h6m-6 4h4m-5 4l-4-4H6a2 2 0 01-2-2V6a2 2 0 012-2h12a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                          </svg>
+                          {post.comments_count || 0} comments
+                        </Link>
+                        <button
+                          onClick={(e) => handleLikeToggle(e, post)}
+                          disabled={likingPosts.has(post.id)}
+                          className={`flex items-center gap-2 transition-colors ${
+                            post.user_liked 
+                              ? "text-red-400 hover:text-red-300" 
+                              : "hover:text-emerald-300"
+                          } ${likingPosts.has(post.id) ? "opacity-50 cursor-not-allowed" : ""}`}
+                        >
+                          <svg 
+                            className="h-4 w-4" 
+                            fill={post.user_liked ? "currentColor" : "none"} 
+                            stroke="currentColor" 
+                            viewBox="0 0 24 24"
+                          >
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                           </svg>
-                          {post.likes_count || 0} likes
-                        </span>
+                          {post.post_likes_count || 0} likes
+                        </button>
+                        <QuickComment 
+                          post={post} 
+                          onCommentAdded={(comment) => handleCommentAdded(post.id, comment)}
+                        />
                       </div>
                     </div>
                   </div>
@@ -183,7 +296,7 @@ export default function BlogSection() {
               </Link>
             ))}
           </div>
-          
+          <br></br>
           {posts.length > 6 && (
             <div className="text-center mt-12 pt-8 border-t border-slate-700/30">
               <Link

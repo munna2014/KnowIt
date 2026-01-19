@@ -199,7 +199,7 @@ export default function Navbar() {
           </div>
         </div>
         <details className="relative">
-          <summary className="list-none flex h-9 w-9 cursor-pointer items-center justify-center rounded-full overflow-hidden bg-emerald-600 text-xs font-semibold text-white">
+          <summary className="list-none flex h-9 w-9 cursor-pointer items-center justify-center rounded-full overflow-hidden bg-slate-200 text-xs font-semibold text-slate-700">
             {isMounted && getUserAvatar(user) ? (
               <img
                 src={resolveAvatarUrl(getUserAvatar(user))}

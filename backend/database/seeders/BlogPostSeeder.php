@@ -35,7 +35,6 @@ class BlogPostSeeder extends Seeder
                 'published_at' => now(),
                 'tags' => ['design', 'ux', 'presentation', 'team'],
                 'views_count' => 42,
-                'likes_count' => 8,
             ],
             [
                 'title' => 'Getting Started with React Hooks',
@@ -47,7 +46,6 @@ class BlogPostSeeder extends Seeder
                 'published_at' => now()->subDays(1),
                 'tags' => ['react', 'javascript', 'hooks', 'frontend'],
                 'views_count' => 156,
-                'likes_count' => 23,
             ],
             [
                 'title' => 'The Future of Web Development',
@@ -59,7 +57,6 @@ class BlogPostSeeder extends Seeder
                 'published_at' => now()->subDays(2),
                 'tags' => ['web development', 'technology', 'future', 'trends'],
                 'views_count' => 89,
-                'likes_count' => 15,
             ],
         ];
 
@@ -75,7 +72,6 @@ class BlogPostSeeder extends Seeder
                 'published_at' => $postData['published_at'],
                 'tags' => $postData['tags'],
                 'views_count' => $postData['views_count'],
-                'likes_count' => $postData['likes_count'],
             ]);
         }
     }

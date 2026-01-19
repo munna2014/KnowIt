@@ -48,12 +48,19 @@ class AuthController extends Controller
     public function login(Request $request)
     {
         $validated = $request->validate([
-            'email' => ['nullable', 'email', 'max:255', 'required_without:identifier'],
-            'identifier' => ['nullable', 'string', 'max:255', 'required_without:email'],
+            'email' => ['nullable', 'email', 'max:255', 'required_without:phone'],
+            'phone' => ['nullable', 'string', 'max:25', 'required_without:email'],
             'password' => ['required', 'string'],
         ]);
 
-        $identifier = trim($validated['email'] ?? $validated['identifier'] ?? '');
+        $identifier = trim($validated['email'] ?? $validated['phone'] ?? '');
+        
+        if (empty($identifier)) {
+            return response()->json([
+                'message' => 'Email or phone is required.',
+            ], 422);
+        }
+
         $user = User::query()
             ->where(function ($query) use ($identifier) {
                 if (filter_var($identifier, FILTER_VALIDATE_EMAIL)) {
@@ -70,6 +77,9 @@ class AuthController extends Controller
                 'message' => 'Invalid credentials.',
             ], 401);
         }
+
+        // Delete old tokens for this user (optional - for single session)
+        // $user->tokens()->delete();
 
         $token = $user->createToken('auth_token')->plainTextToken;
 

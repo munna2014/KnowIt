@@ -11,7 +11,8 @@ class BlogPostController extends Controller
 {
     public function index(Request $request)
     {
-        $query = BlogPost::with('user:id,name,first_name,last_name,avatar_url,avatar_path')
+        $query = BlogPost::with('user:id,name,first_name,last_name,avatar_url,avatar_path,bio')
+                         ->withCount(['comments', 'postLikes'])
                          ->orderBy('created_at', 'desc');
 
         // Filter by status if provided
@@ -95,7 +96,7 @@ class BlogPostController extends Controller
         }
 
         $post = BlogPost::create($postData);
-        $post->load('user:id,name,first_name,last_name,avatar_url,avatar_path');
+        $post->load('user:id,name,first_name,last_name,avatar_url,avatar_path,bio');
 
         return response()->json([
             'message' => 'Blog post created successfully!',
@@ -105,7 +106,8 @@ class BlogPostController extends Controller
 
     public function show(BlogPost $blogPost)
     {
-        $blogPost->load('user:id,name,first_name,last_name,avatar_url,avatar_path');
+        $blogPost->load('user:id,name,first_name,last_name,avatar_url,avatar_path,bio');
+        $blogPost->loadCount(['comments', 'postLikes']);
         
         // Increment view count
         $blogPost->increment('views_count');
@@ -124,7 +126,7 @@ class BlogPostController extends Controller
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
-        $blogPost->load('user:id,name,first_name,last_name,avatar_url,avatar_path');
+        $blogPost->load('user:id,name,first_name,last_name,avatar_url,avatar_path,bio');
 
         return response()->json([
             'post' => $blogPost,
@@ -184,7 +186,7 @@ class BlogPostController extends Controller
         }
 
         $blogPost->update($updateData);
-        $blogPost->load('user:id,name,first_name,last_name,avatar_url,avatar_path');
+        $blogPost->load('user:id,name,first_name,last_name,avatar_url,avatar_path,bio');
 
         return response()->json([
             'message' => 'Blog post updated successfully!',
@@ -216,6 +218,7 @@ class BlogPostController extends Controller
     public function myPosts(Request $request)
     {
         $query = BlogPost::where('user_id', $request->user()->id)
+                         ->withCount(['comments', 'postLikes'])
                          ->orderBy('created_at', 'desc');
 
         // Filter by status if provided

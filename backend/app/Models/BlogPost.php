@@ -22,7 +22,6 @@ class BlogPost extends Model
         'published_at',
         'tags',
         'views_count',
-        'likes_count',
     ];
 
     protected $appends = [
@@ -33,7 +32,6 @@ class BlogPost extends Model
         'tags' => 'array',
         'published_at' => 'datetime',
         'views_count' => 'integer',
-        'likes_count' => 'integer',
     ];
 
     protected static function boot()
@@ -80,6 +78,16 @@ class BlogPost extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function comments()
+    {
+        return $this->hasMany(Comment::class)->latest();
+    }
+
+    public function postLikes()
+    {
+        return $this->hasMany(BlogPostLike::class);
     }
 
     public function scopePublished($query)

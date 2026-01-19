@@ -28,6 +28,18 @@ const resolveAvatarUrl = (url) => {
   return `http://localhost:8000${url}`;
 };
 
+const isLocalStorageAvatarUrl = (url) => {
+  if (!url) return false;
+  if (url.startsWith("/storage/")) return true;
+  if (url.includes("/storage/avatars/")) return true;
+  try {
+    const parsed = new URL(url);
+    return parsed.pathname.startsWith("/storage/");
+  } catch {
+    return false;
+  }
+};
+
 export default function ProfilePage() {
   const router = useRouter();
   const [form, setForm] = useState({
@@ -55,7 +67,7 @@ export default function ProfilePage() {
   useEffect(() => {
     mountedRef.current = true;
     
-    const initializeProfile = () => {
+    const initializeProfile = async () => {
       const user = getAuthUser();
       const token = getAuthToken();
       
@@ -67,26 +79,56 @@ export default function ProfilePage() {
         return;
       }
       
-      // Load user data into form from localStorage
-      if (mountedRef.current) {
-        setForm({
-          firstName: user.first_name || "",
-          lastName: user.last_name || "",
-          email: user.email || "",
-          phone: user.phone || "",
-          gender: user.gender || "",
-          birthday: user.birthday || "",
-          avatarUrl: user.avatar_url || "",
-          bio: user.bio || "",
-        });
-        
-        // Set avatar preview if available
-        if (user.avatar_url) {
-          console.log("Setting avatar preview from localStorage:", user.avatar_url);
-          setAvatarPreview(user.avatar_url);
+      // Fetch fresh user data from API
+      try {
+        const data = await apiRequest("profile");
+        if (data?.user && mountedRef.current) {
+          // Update localStorage with fresh data
+          saveAuthUser(data.user);
+          
+          // Load fresh user data into form
+          setForm({
+            firstName: data.user.first_name || "",
+            lastName: data.user.last_name || "",
+            email: data.user.email || "",
+            phone: data.user.phone || "",
+            gender: data.user.gender || "",
+            birthday: data.user.birthday || "",
+            avatarUrl: data.user.avatar_url || "",
+            bio: data.user.bio || "",
+          });
+          
+          // Set avatar preview if available
+          if (data.user.avatar_url) {
+            console.log("Setting avatar preview from API:", data.user.avatar_url);
+            setAvatarPreview(data.user.avatar_url);
+          }
         }
-        
-        setIsLoading(false);
+      } catch (err) {
+        console.error("Error fetching profile:", err);
+        // Fall back to localStorage data if API fails
+        if (mountedRef.current) {
+          setForm({
+            firstName: user.first_name || "",
+            lastName: user.last_name || "",
+            email: user.email || "",
+            phone: user.phone || "",
+            gender: user.gender || "",
+            birthday: user.birthday || "",
+            avatarUrl: user.avatar_url || "",
+            bio: user.bio || "",
+          });
+          
+          // Set avatar preview if available
+          if (user.avatar_url) {
+            console.log("Setting avatar preview from localStorage:", user.avatar_url);
+            setAvatarPreview(user.avatar_url);
+          }
+        }
+      } finally {
+        if (mountedRef.current) {
+          setIsLoading(false);
+        }
       }
     };
 
@@ -264,22 +306,48 @@ export default function ProfilePage() {
         phone: form.phone?.trim() || undefined,
         gender: form.gender || undefined,
         birthday: form.birthday || undefined,
-        avatar_url: form.avatarUrl?.trim() || undefined,
         bio: form.bio?.trim() || undefined,
       };
+
+      // Only send avatar_url when the user provides an external URL.
+      const trimmedAvatarUrl = form.avatarUrl?.trim();
+      if (trimmedAvatarUrl && !isLocalStorageAvatarUrl(trimmedAvatarUrl)) {
+        payload.avatar_url = trimmedAvatarUrl;
+      }
+
+      console.log("Sending profile update payload:", payload);
 
       const data = await apiRequest("profile", {
         method: "PUT",
         data: payload,
       });
 
+      console.log("Profile update response:", data);
+
       if (data?.user) {
-        saveAuthUser(data.user);
-        setForm((current) => ({
-          ...current,
-          avatarUrl: data.user.avatar_url || "",
-        }));
-        setAvatarPreview(data.user.avatar_url || avatarPreview);
+        const currentUser = getAuthUser();
+        const nextAvatarUrl =
+          data.user.avatar_url || form.avatarUrl || avatarPreview || currentUser?.avatar_url || "";
+        const mergedUser = {
+          ...currentUser,
+          ...data.user,
+          avatar_url: nextAvatarUrl,
+        };
+        console.log("Saving updated user data:", mergedUser);
+        saveAuthUser(mergedUser);
+        
+        // Update form with fresh data from server
+        setForm({
+          firstName: data.user.first_name || "",
+          lastName: data.user.last_name || "",
+          email: data.user.email || "",
+          phone: data.user.phone || "",
+          gender: data.user.gender || "",
+          birthday: data.user.birthday || "",
+          avatarUrl: nextAvatarUrl,
+          bio: data.user.bio || "",
+        });
+        setAvatarPreview(nextAvatarUrl);
         
         // Trigger navbar update
         window.dispatchEvent(new Event('userUpdated'));
@@ -663,21 +731,43 @@ export default function ProfilePage() {
                 <div className="flex gap-4">
                   <button
                     type="button"
-                    onClick={() => {
-                      const user = getAuthUser();
-                      if (user) {
-                        setForm({
-                          firstName: user.first_name || "",
-                          lastName: user.last_name || "",
-                          email: user.email || "",
-                          phone: user.phone || "",
-                          gender: user.gender || "",
-                          birthday: user.birthday || "",
-                          avatarUrl: user.avatar_url || "",
-                          bio: user.bio || "",
-                        });
-                        setAvatarPreview(user.avatar_url || "");
-                        setSuccess("Form reset to saved values!");
+                    onClick={async () => {
+                      try {
+                        // Fetch fresh data from API
+                        const data = await apiRequest("profile");
+                        if (data?.user) {
+                          saveAuthUser(data.user);
+                          setForm({
+                            firstName: data.user.first_name || "",
+                            lastName: data.user.last_name || "",
+                            email: data.user.email || "",
+                            phone: data.user.phone || "",
+                            gender: data.user.gender || "",
+                            birthday: data.user.birthday || "",
+                            avatarUrl: data.user.avatar_url || "",
+                            bio: data.user.bio || "",
+                          });
+                          setAvatarPreview(data.user.avatar_url || "");
+                          setSuccess("Form reset with latest data!");
+                        }
+                      } catch (err) {
+                        console.error("Error fetching fresh data:", err);
+                        // Fall back to localStorage
+                        const user = getAuthUser();
+                        if (user) {
+                          setForm({
+                            firstName: user.first_name || "",
+                            lastName: user.last_name || "",
+                            email: user.email || "",
+                            phone: user.phone || "",
+                            gender: user.gender || "",
+                            birthday: user.birthday || "",
+                            avatarUrl: user.avatar_url || "",
+                            bio: user.bio || "",
+                          });
+                          setAvatarPreview(user.avatar_url || "");
+                          setSuccess("Form reset to saved values!");
+                        }
                       }
                     }}
                     className="rounded-lg border border-slate-600 bg-slate-800/50 px-6 py-3 text-sm font-medium text-slate-200 shadow-sm transition-colors hover:bg-slate-700"
