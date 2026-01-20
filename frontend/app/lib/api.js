@@ -9,6 +9,75 @@ const userDataCache = {
   ttl: 30000, // 30 seconds
 };
 
+// Enhanced cache for blog posts with localStorage persistence
+const blogPostsCache = {
+  data: null,
+  timestamp: 0,
+  ttl: 300000, // 5 minutes for blog posts
+  key: 'blog_posts_cache'
+};
+
+// Cache for individual blog post details
+const blogDetailsCache = new Map();
+
+function shouldUseBlogPostsCache(path) {
+  if (!path.startsWith("blog-posts")) return false;
+  const queryIndex = path.indexOf("?");
+  if (queryIndex === -1) return false;
+  const params = new URLSearchParams(path.slice(queryIndex + 1));
+  if (params.get("status") !== "published") return false;
+  const disallowed = ["user_id", "category", "search", "page", "limit"];
+  return !disallowed.some((key) => params.has(key));
+}
+
+// Get cached blog posts from localStorage
+function getCachedBlogPosts() {
+  if (typeof window === "undefined") return null;
+  
+  try {
+    const cached = localStorage.getItem(blogPostsCache.key);
+    if (!cached) return null;
+    
+    const { data, timestamp } = JSON.parse(cached);
+    if (Date.now() - timestamp > blogPostsCache.ttl) {
+      localStorage.removeItem(blogPostsCache.key);
+      return null;
+    }
+    
+    return data;
+  } catch (error) {
+    console.warn("Error reading cached blog posts:", error);
+    return null;
+  }
+}
+
+// Save blog posts to localStorage cache
+function setCachedBlogPosts(data) {
+  if (typeof window === "undefined") return;
+  
+  try {
+    const cacheData = {
+      data,
+      timestamp: Date.now()
+    };
+    localStorage.setItem(blogPostsCache.key, JSON.stringify(cacheData));
+    
+    // Also update memory cache
+    blogPostsCache.data = data;
+    blogPostsCache.timestamp = Date.now();
+  } catch (error) {
+    console.warn("Error caching blog posts:", error);
+  }
+}
+
+// Clear blog posts cache
+function clearBlogPostsCache() {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(blogPostsCache.key);
+  blogPostsCache.data = null;
+  blogPostsCache.timestamp = 0;
+}
+
 export function getApiBaseUrl() {
   return process.env.NEXT_PUBLIC_API_BASE_URL || DEFAULT_API_BASE_URL;
 }
@@ -80,6 +149,7 @@ export async function apiRequest(path, options = {}) {
     headers = {},
     token = getAuthToken(),
     skipCache = false,
+    useLocalStorage = false,
   } = options;
 
   const baseUrl = getApiBaseUrl().replace(/\/+$/, "");
@@ -89,7 +159,16 @@ export async function apiRequest(path, options = {}) {
   // Create cache key for GET requests
   const cacheKey = `${method}:${url}:${token}`;
   
-  // For GET requests, check cache to prevent duplicates
+  // Special handling for blog posts with localStorage cache
+  if (method === "GET" && !skipCache && shouldUseBlogPostsCache(path)) {
+    const cachedPosts = getCachedBlogPosts();
+    if (cachedPosts) {
+      console.log("Returning cached blog posts from localStorage");
+      return Promise.resolve(cachedPosts);
+    }
+  }
+  
+  // For GET requests, check memory cache to prevent duplicates
   if (method === "GET" && !skipCache && requestCache.has(cacheKey)) {
     console.log("Returning cached request for:", cacheKey);
     return requestCache.get(cacheKey);
@@ -128,6 +207,24 @@ export async function apiRequest(path, options = {}) {
       const error = new Error(message);
       error.status = response.status;
       error.payload = payload;
+
+      if (
+        typeof window !== "undefined" &&
+        response.status === 403 &&
+        payload?.message === "You have been banned from this server."
+      ) {
+        localStorage.removeItem("auth_token");
+        localStorage.removeItem("auth_user");
+        window.location.href = "/component/banned";
+      }
+      
+      // Handle Laravel validation errors specifically
+      if (response.status === 422 && payload?.errors) {
+        error.errors = payload.errors;
+        // Create a more readable message from validation errors
+        const errorMessages = Object.values(payload.errors).flat();
+        error.message = errorMessages.join(', ');
+      }
       
       // Clear cache on error to prevent stale data
       if (requestCache.has(cacheKey)) {
@@ -135,6 +232,11 @@ export async function apiRequest(path, options = {}) {
       }
       
       throw error;
+    }
+
+    // Cache blog posts in localStorage for faster subsequent loads
+    if (method === "GET" && shouldUseBlogPostsCache(path) && payload) {
+      setCachedBlogPosts(payload);
     }
 
     return payload;
@@ -156,14 +258,15 @@ export async function apiRequest(path, options = {}) {
     throw networkError;
   });
 
-  // Cache GET requests
+  // Cache GET requests in memory
   if (method === "GET" && !skipCache) {
     requestCache.set(cacheKey, requestPromise);
     
-    // Clear cache after 30 seconds
+    // Clear memory cache after appropriate time
+    const cacheTimeout = path.includes("blog-posts") ? 300000 : 30000; // 5 minutes for blog posts, 30 seconds for others
     setTimeout(() => {
       requestCache.delete(cacheKey);
-    }, 30000);
+    }, cacheTimeout);
   }
 
   return requestPromise;
@@ -189,4 +292,9 @@ export function clearAllCaches() {
   requestCache.clear();
   userDataCache.data = null;
   userDataCache.timestamp = 0;
+  clearBlogPostsCache();
+  blogDetailsCache.clear();
 }
+
+// Export cache management functions
+export { getCachedBlogPosts, setCachedBlogPosts, clearBlogPostsCache };

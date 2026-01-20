@@ -17,6 +17,18 @@ const categories = [
   { value: "other", label: "Other" },
 ];
 
+const DHAKA_OFFSET_MINUTES = 6 * 60;
+
+const toDhakaISOString = (localValue) => {
+  if (!localValue) return "";
+  const [datePart, timePart] = localValue.split("T");
+  if (!datePart || !timePart) return "";
+  const [year, month, day] = datePart.split("-").map(Number);
+  const [hour, minute] = timePart.split(":").map(Number);
+  const utcMs = Date.UTC(year, month - 1, day, hour, minute) - DHAKA_OFFSET_MINUTES * 60 * 1000;
+  return new Date(utcMs).toISOString();
+};
+
 export default function CreateBlogPage() {
   const router = useRouter();
   const [form, setForm] = useState({
@@ -27,6 +39,7 @@ export default function CreateBlogPage() {
     featuredImageUrl: "",
     tags: [],
     status: "draft",
+    scheduledAt: "",
   });
   const [featuredImage, setFeaturedImage] = useState(null);
   const [featuredImagePreview, setFeaturedImagePreview] = useState("");
@@ -136,6 +149,9 @@ export default function CreateBlogPage() {
       formData.append('title', form.title.trim());
       formData.append('content', form.content.trim());
       formData.append('status', status);
+      if (form.scheduledAt) {
+        formData.append('scheduled_at', toDhakaISOString(form.scheduledAt));
+      }
       
       if (form.excerpt.trim()) {
         formData.append('excerpt', form.excerpt.trim());
@@ -162,7 +178,7 @@ export default function CreateBlogPage() {
         data: formData,
       });
 
-      setSuccess(`Blog post ${status === 'published' ? 'published' : 'saved as draft'} successfully!`);
+      setSuccess(`Blog post ${status === 'review' ? 'submitted for review' : 'saved as draft'} successfully!`);
       
       // Redirect after a short delay
       setTimeout(() => {
@@ -457,7 +473,7 @@ export default function CreateBlogPage() {
                 
                 <button
                   type="button"
-                  onClick={(e) => handleSubmit(e, 'published')}
+                  onClick={(e) => handleSubmit(e, 'review')}
                   disabled={isSubmitting}
                   className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-6 py-3 text-sm font-medium text-white shadow-lg shadow-emerald-600/30 transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
@@ -466,18 +482,30 @@ export default function CreateBlogPage() {
                       <svg className="h-4 w-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                       </svg>
-                      Publishing...
+                      Submitting...
                     </>
                   ) : (
                     <>
                       <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                       </svg>
-                      Publish
+                      Submit for Review
                     </>
                   )}
                 </button>
               </div>
+            </div>
+            <div className="rounded-xl border border-slate-700/60 bg-slate-900/70 p-6 shadow-xl">
+              <label className="block text-lg font-medium text-white mb-3">
+                Schedule Publish (optional)
+              </label>
+              <input
+                type="datetime-local"
+                name="scheduledAt"
+                value={form.scheduledAt}
+                onChange={handleChange}
+                className="block w-full rounded-lg border border-slate-600 bg-slate-800/50 px-4 py-3 text-slate-200 placeholder-slate-500 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+              />
             </div>
           </form>
         </div>

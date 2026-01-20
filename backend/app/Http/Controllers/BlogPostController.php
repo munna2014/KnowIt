@@ -12,12 +12,20 @@ class BlogPostController extends Controller
     public function index(Request $request)
     {
         $query = BlogPost::with('user:id,name,first_name,last_name,avatar_url,avatar_path,bio')
-                         ->withCount(['comments', 'postLikes'])
+                         ->withCount([
+                             'comments as comments_count' => function ($query) {
+                                 $query->where('status', 'approved');
+                             },
+                             'postLikes'
+                         ])
                          ->orderBy('created_at', 'desc');
 
         // Filter by status if provided
         if ($request->has('status')) {
-            $query->where('status', $request->status);
+            if ($request->status !== 'published') {
+                return response()->json(['message' => 'Unauthorized'], 403);
+            }
+            $query->published();
         } else {
             // Default to published posts for public access
             $query->published();
@@ -67,7 +75,8 @@ class BlogPostController extends Controller
             'featured_image_url' => ['nullable', 'url'],
             'tags' => ['nullable', 'array'],
             'tags.*' => ['string', 'max:50'],
-            'status' => ['required', 'in:draft,published'],
+            'status' => ['required', 'in:draft,review'],
+            'scheduled_at' => ['nullable', 'date'],
         ]);
 
         $user = $request->user();
@@ -80,6 +89,8 @@ class BlogPostController extends Controller
             'category' => $validated['category'] ?? null,
             'tags' => $validated['tags'] ?? null,
             'status' => $validated['status'],
+            'scheduled_at' => $validated['scheduled_at'] ?? null,
+            'rejection_reason' => null,
         ];
 
         // Handle featured image upload
@@ -88,11 +99,6 @@ class BlogPostController extends Controller
             $postData['featured_image'] = $path;
         } elseif (!empty($validated['featured_image_url'])) {
             $postData['featured_image'] = $validated['featured_image_url'];
-        }
-
-        // Set published_at if status is published
-        if ($validated['status'] === 'published') {
-            $postData['published_at'] = now();
         }
 
         $post = BlogPost::create($postData);
@@ -104,10 +110,25 @@ class BlogPostController extends Controller
         ], 201);
     }
 
-    public function show(BlogPost $blogPost)
+    public function show(BlogPost $blogPost, Request $request)
     {
+        if ($blogPost->status !== 'published') {
+            $user = $request->user() ?? auth('sanctum')->user();
+            $isAdmin = $user && $user->role === 'admin';
+            $isOwner = $user && $blogPost->user_id === $user->id;
+
+            if (!$isAdmin && !$isOwner) {
+                return response()->json(['message' => 'Not found'], 404);
+            }
+        }
+
         $blogPost->load('user:id,name,first_name,last_name,avatar_url,avatar_path,bio');
-        $blogPost->loadCount(['comments', 'postLikes']);
+        $blogPost->loadCount([
+            'comments as comments_count' => function ($query) {
+                $query->where('status', 'approved');
+            },
+            'postLikes'
+        ]);
         
         // Increment view count
         $blogPost->increment('views_count');
@@ -151,7 +172,8 @@ class BlogPostController extends Controller
             'featured_image_url' => ['nullable', 'url'],
             'tags' => ['nullable', 'array'],
             'tags.*' => ['string', 'max:50'],
-            'status' => ['required', 'in:draft,published,archived'],
+            'status' => ['required', 'in:draft,review,archived'],
+            'scheduled_at' => ['nullable', 'date'],
         ]);
 
         $updateData = [
@@ -161,6 +183,7 @@ class BlogPostController extends Controller
             'category' => $validated['category'] ?? null,
             'tags' => $validated['tags'] ?? null,
             'status' => $validated['status'],
+            'scheduled_at' => $validated['scheduled_at'] ?? null,
         ];
 
         // Handle featured image upload
@@ -180,9 +203,12 @@ class BlogPostController extends Controller
             $updateData['featured_image'] = $validated['featured_image_url'];
         }
 
-        // Set published_at if status changed to published
-        if ($validated['status'] === 'published' && $blogPost->status !== 'published') {
-            $updateData['published_at'] = now();
+        if ($blogPost->status === 'published' && $validated['status'] !== 'published') {
+            $updateData['published_at'] = null;
+        }
+        if (in_array($validated['status'], ['draft', 'review'], true)) {
+            $updateData['rejection_reason'] = null;
+            $updateData['scheduled_at'] = $validated['scheduled_at'] ?? null;
         }
 
         $blogPost->update($updateData);
@@ -218,7 +244,12 @@ class BlogPostController extends Controller
     public function myPosts(Request $request)
     {
         $query = BlogPost::where('user_id', $request->user()->id)
-                         ->withCount(['comments', 'postLikes'])
+                         ->withCount([
+                             'comments as comments_count' => function ($query) {
+                                 $query->where('status', 'approved');
+                             },
+                             'postLikes'
+                         ])
                          ->orderBy('created_at', 'desc');
 
         // Filter by status if provided
