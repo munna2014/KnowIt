@@ -4,15 +4,16 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Navbar from "../../Navbar";
+import SocialShare from "../SocialShare";
 import { apiRequest, getAuthToken, getAuthUser } from "../../../lib/api";
+import { 
+  formatDate, 
+  formatCommentDate, 
+  getUserInitials, 
+  resolveAvatarUrl 
+} from "../../../lib/utils";
 
-const resolveAvatarUrl = (url) => {
-  if (!url) return "";
-  if (url.startsWith("http") || url.startsWith("blob:") || url.startsWith("data:")) {
-    return url;
-  }
-  return `http://localhost:8000${url}`;
-};
+
 
 export default function BlogPostPage() {
   const params = useParams();
@@ -25,6 +26,7 @@ export default function BlogPostPage() {
   const [commentsLoading, setCommentsLoading] = useState(true);
   const [commentBody, setCommentBody] = useState("");
   const [commentError, setCommentError] = useState("");
+  const [commentNotice, setCommentNotice] = useState("");
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
   const [replyingTo, setReplyingTo] = useState(null);
   const [replyBody, setReplyBody] = useState("");
@@ -48,9 +50,12 @@ export default function BlogPostPage() {
         await loadLikeStatus(params.slug);
 
         // Load related posts by the same author
-        if (data.post?.user_id) {
+        const authorId = data.post?.user_id ?? data.post?.user?.id;
+        if (authorId) {
           try {
-            const relatedData = await apiRequest(`blog-posts?user_id=${data.post.user_id}&status=published&limit=4`);
+            const relatedData = await apiRequest(
+              `blog-posts?user_id=${authorId}&status=published&limit=4`
+            );
             // Filter out the current post and limit to 3 related posts
             const filtered = (relatedData.posts || [])
               .filter(p => p.slug !== params.slug)
@@ -105,34 +110,7 @@ export default function BlogPostPage() {
     }
   };
 
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-  };
 
-  const getUserInitials = (user) => {
-    if (!user) return "U";
-    const name = user.name || `${user.first_name || ''} ${user.last_name || ''}`.trim();
-    if (name) {
-      const parts = name.split(' ').filter(Boolean);
-      if (parts.length >= 2) {
-        return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-      }
-      return name.substring(0, 2).toUpperCase();
-    }
-    return "U";
-  };
-
-  const formatCommentDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
-  };
 
   const updateCommentInState = (commentId, newBody) => {
     setComments((current) =>
@@ -202,15 +180,20 @@ export default function BlogPostPage() {
     try {
       setIsSubmittingComment(true);
       setCommentError("");
+      setCommentNotice("");
       const data = await apiRequest(`blog-posts/${params.slug}/comments`, {
         method: "POST",
         data: { body: trimmed },
       });
       if (data?.comment) {
-        setComments((current) => [...current, data.comment]);
+        if (data.comment.status === "approved") {
+          setComments((current) => [...current, data.comment]);
+          adjustCommentCount(1);
+        } else {
+          setCommentNotice("Your comment was submitted for review.");
+        }
         setCommentBody("");
         setShowCommentForm(false);
-        adjustCommentCount(1);
       }
     } catch (err) {
       console.error("Error submitting comment:", err);
@@ -241,21 +224,26 @@ export default function BlogPostPage() {
     try {
       setIsSubmittingComment(true);
       setCommentError("");
+      setCommentNotice("");
       const data = await apiRequest(`blog-posts/${params.slug}/comments`, {
         method: "POST",
         data: { body: trimmed, parent_id: replyingTo },
       });
       if (data?.comment) {
-        setComments((current) =>
-          current.map((comment) =>
-            comment.id === replyingTo
-              ? { ...comment, replies: [...(comment.replies || []), data.comment] }
-              : comment
-          )
-        );
+        if (data.comment.status === "approved") {
+          setComments((current) =>
+            current.map((comment) =>
+              comment.id === replyingTo
+                ? { ...comment, replies: [...(comment.replies || []), data.comment] }
+                : comment
+            )
+          );
+          adjustCommentCount(1);
+        } else {
+          setCommentNotice("Your reply was submitted for review.");
+        }
         setReplyBody("");
         setReplyingTo(null);
-        adjustCommentCount(1);
       }
     } catch (err) {
       console.error("Error submitting reply:", err);
@@ -286,7 +274,13 @@ export default function BlogPostPage() {
         data: { body: trimmed },
       });
       if (data?.comment) {
-        updateCommentInState(editingCommentId, data.comment.body);
+        if (data.comment.status === "approved") {
+          updateCommentInState(editingCommentId, data.comment.body);
+        } else {
+          removeCommentFromState(editingCommentId);
+          adjustCommentCount(-1);
+          setCommentNotice("Your updated comment was submitted for review.");
+        }
         setEditingCommentId(null);
         setEditingBody("");
       }
@@ -405,6 +399,25 @@ export default function BlogPostPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <style jsx>{`
+        @keyframes scrollRightToLeft {
+          0% {
+            transform: translateX(100%);
+          }
+          100% {
+            transform: translateX(-100%);
+          }
+        }
+        
+        .animate-scroll-right-to-left {
+          animation: scrollRightToLeft 15s linear infinite;
+          white-space: nowrap;
+        }
+        
+        .animate-scroll-right-to-left:hover {
+          animation-play-state: paused;
+        }
+      `}</style>
       <Navbar />
       
       <div className="pt-16">
@@ -423,7 +436,7 @@ export default function BlogPostPage() {
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent"></div>
               
               {/* Title Overlay */}
-              <div className="absolute  inset-0 flex items-end">
+              <div className="absolute inset-0 flex items-end">
                 <div className="w-full p-8 md:p-12">
                   <div className="mx-auto max-w-4xl">
                     {post.category && (
@@ -431,9 +444,11 @@ export default function BlogPostPage() {
                         {post.category}
                       </span>
                     )}
-                    <h1 className="text-3xl md:text-5xl font-bold text-white leading-tight">
-                      {post.title}
-                    </h1>
+                    <div className="overflow-hidden">
+                      <h1 className="text-3xl md:text-5xl font-bold text-white leading-tight animate-scroll-right-to-left">
+                        {post.title}
+                      </h1>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -451,9 +466,11 @@ export default function BlogPostPage() {
                   {post.category}
                 </span>
               )}
-              <h1 className="text-4xl md:text-5xl font-bold text-gray-900 leading-tight mb-6">
-                {post.title}
-              </h1>
+              <div className="overflow-hidden">
+                <h1 className="text-4xl md:text-5xl font-bold text-gray-900 leading-tight mb-6 animate-scroll-right-to-left">
+                  {post.title}
+                </h1>
+              </div>
             </header>
           )}
 
@@ -480,18 +497,21 @@ export default function BlogPostPage() {
                   {post.user?.name || `${post.user?.first_name || ''} ${post.user?.last_name || ''}`.trim() || "Anonymous"}
                 </p>
                 <p className="text-gray-600">Author</p>
+                <div className="flex items-center gap-3 text-sm text-gray-500 mt-1">
+                  <span>{formatDate(post.published_at || post.created_at)}</span>
+                  <span>•</span>
+                  <span>{post.views_count || 0} views</span>
+                </div>
               </div>
             </div>
             
-            <div className="text-right">
-              <p className="text-gray-600 mb-2">
-                {formatDate(post.published_at || post.created_at)}
-              </p>
+            <div className="flex items-center gap-3">
+              <SocialShare post={post} className="no-print" />
               <button
                 type="button"
                 onClick={handleLikeToggle}
                 disabled={isLiking}
-                className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-base font-semibold transition ${
+                className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-base font-semibold transition no-print ${
                   liked
                     ? "border-emerald-300 bg-emerald-50 text-emerald-600"
                     : "border-gray-200 text-gray-500 hover:border-emerald-200 hover:text-emerald-600"
@@ -571,12 +591,12 @@ export default function BlogPostPage() {
           </div>
 
             {/* Comments */}
-          <div id="comments" className="mt-16 border-t border-gray-200 pt-10">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-gray-900">
-                Comments ({post.comments_count || comments.length})
-              </h2>
-              <button
+          <div id="comments" className="mt-16 border-t border-gray-200 pt-10 no-print">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-bold text-gray-900">
+              Comments ({post.comments_count || comments.length})
+            </h2>
+            <button
                 type="button"
                 onClick={() => setShowCommentForm((current) => !current)}
                 className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 transition-colors hover:border-emerald-300 hover:bg-emerald-100"
@@ -589,6 +609,10 @@ export default function BlogPostPage() {
                 {showCommentForm ? "Hide" : "Comment"}
               </button>
             </div>
+
+            {commentNotice && !commentError && (
+              <p className="mb-6 text-sm text-emerald-600">{commentNotice}</p>
+            )}
 
             {showCommentForm && (
               <form
@@ -608,6 +632,9 @@ export default function BlogPostPage() {
                 />
                 {commentError && (
                   <p className="mt-3 text-sm text-red-600">{commentError}</p>
+                )}
+                {commentNotice && !commentError && (
+                  <p className="mt-3 text-sm text-emerald-600">{commentNotice}</p>
                 )}
                 <div className="mt-4 flex items-center justify-between">
                   <p className="text-xs text-gray-500">

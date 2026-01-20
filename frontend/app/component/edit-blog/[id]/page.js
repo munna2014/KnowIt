@@ -17,6 +17,31 @@ const categories = [
   { value: "other", label: "Other" },
 ];
 
+const DHAKA_OFFSET_MINUTES = 6 * 60;
+
+const toDhakaISOString = (localValue) => {
+  if (!localValue) return "";
+  const [datePart, timePart] = localValue.split("T");
+  if (!datePart || !timePart) return "";
+  const [year, month, day] = datePart.split("-").map(Number);
+  const [hour, minute] = timePart.split(":").map(Number);
+  const utcMs = Date.UTC(year, month - 1, day, hour, minute) - DHAKA_OFFSET_MINUTES * 60 * 1000;
+  return new Date(utcMs).toISOString();
+};
+
+const formatDhakaInputValue = (utcValue) => {
+  if (!utcValue) return "";
+  const utcMs = new Date(utcValue).getTime();
+  const dhakaMs = utcMs + DHAKA_OFFSET_MINUTES * 60 * 1000;
+  const date = new Date(dhakaMs);
+  const pad = (value) => String(value).padStart(2, "0");
+  return [
+    date.getUTCFullYear(),
+    pad(date.getUTCMonth() + 1),
+    pad(date.getUTCDate())
+  ].join("-") + "T" + [pad(date.getUTCHours()), pad(date.getUTCMinutes())].join(":");
+};
+
 const resolveImageUrl = (url) => {
   if (!url) return "";
   if (url.startsWith("http") || url.startsWith("blob:") || url.startsWith("data:")) {
@@ -36,6 +61,7 @@ export default function EditBlogPage() {
     featuredImageUrl: "",
     tags: [],
     status: "draft",
+    scheduledAt: "",
   });
   const [originalPost, setOriginalPost] = useState(null);
   const [featuredImage, setFeaturedImage] = useState(null);
@@ -73,6 +99,7 @@ export default function EditBlogPage() {
           featuredImageUrl: "",
           tags: post.tags || [],
           status: post.status || "draft",
+          scheduledAt: formatDhakaInputValue(post.scheduled_at),
         });
         
         if (post.featured_image_url) {
@@ -183,20 +210,35 @@ export default function EditBlogPage() {
       return;
     }
 
-    if (!form.title.trim() || !form.content.trim()) {
-      setError("Title and content are required.");
+    // Clear previous errors
+    setError("");
+    setSuccess("");
+
+    // Basic validation
+    const errors = [];
+    if (!form.title.trim()) {
+      errors.push("Title is required");
+    }
+    if (!form.content.trim()) {
+      errors.push("Content is required");
+    }
+
+    if (errors.length > 0) {
+      setError(errors.join(", ") + ".");
       return;
     }
 
     setIsSubmitting(true);
-    setError("");
-    setSuccess("");
 
     try {
       const formData = new FormData();
+      formData.append('_method', 'PUT'); // Laravel method override
       formData.append('title', form.title.trim());
       formData.append('content', form.content.trim());
       formData.append('status', status);
+      if (form.scheduledAt) {
+        formData.append('scheduled_at', toDhakaISOString(form.scheduledAt));
+      }
       
       if (form.excerpt.trim()) {
         formData.append('excerpt', form.excerpt.trim());
@@ -218,12 +260,20 @@ export default function EditBlogPage() {
         });
       }
 
+      // Debug: Log what we're sending
+      console.log('Sending form data:');
+      for (let [key, value] of formData.entries()) {
+        console.log(key, value);
+      }
+
       const data = await apiRequest(`blog-posts/${params.id}/update`, {
-        method: "PUT",
+        method: "POST", // Use POST with _method override
         data: formData,
       });
 
-      setSuccess(`Blog post ${status === 'published' ? 'published' : 'updated'} successfully!`);
+      setSuccess(
+        `Blog post ${status === 'review' ? 'submitted for review' : 'updated'} successfully!`
+      );
       
       // Redirect after a short delay
       setTimeout(() => {
@@ -241,7 +291,13 @@ export default function EditBlogPage() {
       } else if (err.status === 403) {
         setError("You don't have permission to edit this post.");
       } else if (err.status === 422) {
-        setError(err?.message || "Please check your input and try again.");
+        // Handle validation errors from server
+        if (err.errors) {
+          const errorMessages = Object.values(err.errors).flat();
+          setError(errorMessages.join(", "));
+        } else {
+          setError(err?.message || "Please check your input and try again.");
+        }
       } else {
         setError(err?.message || "Could not update blog post. Please try again.");
       }
@@ -344,9 +400,17 @@ export default function EditBlogPage() {
                 value={form.title}
                 onChange={handleChange}
                 placeholder="Enter your blog post title..."
-                className="block w-full rounded-lg border border-slate-600 bg-slate-800/50 px-4 py-3 text-slate-200 placeholder-slate-500 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                className={`block w-full rounded-lg border px-4 py-3 text-slate-200 placeholder-slate-500 shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 ${
+                  form.title.trim() ? 'border-slate-600 bg-slate-800/50 focus:border-emerald-500' : 'border-red-500/50 bg-red-500/5 focus:border-red-400'
+                }`}
                 required
               />
+              {!form.title.trim() && (
+                <p className="mt-2 text-sm text-red-400">Title is required</p>
+              )}
+              <p className="mt-2 text-xs text-slate-400">
+                {form.title.length}/255 characters
+              </p>
             </div>
 
             {/* Featured Image */}
@@ -441,9 +505,17 @@ export default function EditBlogPage() {
                 onChange={handleChange}
                 placeholder="Write your blog post content here..."
                 rows={12}
-                className="block w-full rounded-lg border border-slate-600 bg-slate-800/50 px-4 py-3 text-slate-200 placeholder-slate-500 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 resize-y"
+                className={`block w-full rounded-lg border px-4 py-3 text-slate-200 placeholder-slate-500 shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 resize-y ${
+                  form.content.trim() ? 'border-slate-600 bg-slate-800/50 focus:border-emerald-500' : 'border-red-500/50 bg-red-500/5 focus:border-red-400'
+                }`}
                 required
               />
+              {!form.content.trim() && (
+                <p className="mt-2 text-sm text-red-400">Content is required</p>
+              )}
+              <p className="mt-2 text-xs text-slate-400">
+                {form.content.length} characters
+              </p>
             </div>
 
             {/* Excerpt */}
@@ -565,7 +637,7 @@ export default function EditBlogPage() {
                 
                 <button
                   type="button"
-                  onClick={(e) => handleSubmit(e, 'published')}
+                  onClick={(e) => handleSubmit(e, 'review')}
                   disabled={isSubmitting}
                   className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-6 py-3 text-sm font-medium text-white shadow-lg shadow-emerald-600/30 transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
@@ -574,18 +646,30 @@ export default function EditBlogPage() {
                       <svg className="h-4 w-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                       </svg>
-                      Publishing...
+                      Submitting...
                     </>
                   ) : (
                     <>
                       <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                       </svg>
-                      {form.status === 'published' ? 'Update' : 'Publish'}
+                      {form.status === 'review' ? 'Update' : 'Submit for Review'}
                     </>
                   )}
                 </button>
               </div>
+            </div>
+            <div className="rounded-xl border border-slate-700/60 bg-slate-900/70 p-6 shadow-xl">
+              <label className="block text-lg font-medium text-white mb-3">
+                Schedule Publish (optional)
+              </label>
+              <input
+                type="datetime-local"
+                name="scheduledAt"
+                value={form.scheduledAt}
+                onChange={handleChange}
+                className="block w-full rounded-lg border border-slate-600 bg-slate-800/50 px-4 py-3 text-slate-200 placeholder-slate-500 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+              />
             </div>
           </form>
         </div>

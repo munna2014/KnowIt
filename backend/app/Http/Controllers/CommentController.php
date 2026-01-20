@@ -16,10 +16,14 @@ class CommentController extends Controller
 
         $comments = Comment::with([
                 'user:id,name,first_name,last_name,avatar_url,avatar_path',
+                'replies' => function ($query) {
+                    $query->where('status', 'approved');
+                },
                 'replies.user:id,name,first_name,last_name,avatar_url,avatar_path',
             ])
             ->where('blog_post_id', $blogPost->id)
             ->whereNull('parent_id')
+            ->where('status', 'approved')
             ->orderBy('created_at', 'asc')
             ->get();
 
@@ -52,17 +56,20 @@ class CommentController extends Controller
             }
         }
 
+        $status = $this->getInitialStatus($validated['body']);
+
         $comment = Comment::create([
             'blog_post_id' => $blogPost->id,
             'user_id' => $request->user()->id,
             'body' => $validated['body'],
             'parent_id' => $parentId,
+            'status' => $status,
         ]);
 
         $comment->load('user:id,name,first_name,last_name,avatar_url,avatar_path');
 
         return response()->json([
-            'message' => 'Comment added.',
+            'message' => $status === 'approved' ? 'Comment added.' : 'Comment submitted for review.',
             'comment' => $comment,
         ], 201);
     }
@@ -79,6 +86,7 @@ class CommentController extends Controller
 
         $comment->update([
             'body' => $validated['body'],
+            'status' => $this->getInitialStatus($validated['body']),
         ]);
 
         $comment->load('user:id,name,first_name,last_name,avatar_url,avatar_path');
@@ -100,5 +108,32 @@ class CommentController extends Controller
         return response()->json([
             'message' => 'Comment deleted.',
         ]);
+    }
+
+    private function getInitialStatus(string $body): string
+    {
+        $lower = strtolower($body);
+        $keywords = [
+            'buy now',
+            'free money',
+            'visit now',
+            'work from home',
+            'limited offer',
+            'viagra',
+            'casino',
+            'porn',
+        ];
+
+        foreach ($keywords as $keyword) {
+            if (str_contains($lower, $keyword)) {
+                return 'spam';
+            }
+        }
+
+        if (preg_match('/(https?:\\/\\/|www\\.)/i', $body)) {
+            return 'spam';
+        }
+
+        return 'pending';
     }
 }

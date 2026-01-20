@@ -30,6 +30,8 @@ class User extends Authenticatable
         'avatar_url',
         'avatar_path',
         'bio',
+        'role',
+        'status',
     ];
 
     /**
@@ -64,6 +66,11 @@ class User extends Authenticatable
     public function postLikes()
     {
         return $this->hasMany(BlogPostLike::class);
+    }
+
+    public function blogPosts()
+    {
+        return $this->hasMany(BlogPost::class);
     }
 
     /**

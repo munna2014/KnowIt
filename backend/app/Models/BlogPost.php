@@ -19,6 +19,8 @@ class BlogPost extends Model
         'featured_image',
         'slug',
         'status',
+        'rejection_reason',
+        'scheduled_at',
         'published_at',
         'tags',
         'views_count',
@@ -31,6 +33,7 @@ class BlogPost extends Model
     protected $casts = [
         'tags' => 'array',
         'published_at' => 'datetime',
+        'scheduled_at' => 'datetime',
         'views_count' => 'integer',
     ];
 

@@ -20,6 +20,16 @@ const blogPostsCache = {
 // Cache for individual blog post details
 const blogDetailsCache = new Map();
 
+function shouldUseBlogPostsCache(path) {
+  if (!path.startsWith("blog-posts")) return false;
+  const queryIndex = path.indexOf("?");
+  if (queryIndex === -1) return false;
+  const params = new URLSearchParams(path.slice(queryIndex + 1));
+  if (params.get("status") !== "published") return false;
+  const disallowed = ["user_id", "category", "search", "page", "limit"];
+  return !disallowed.some((key) => params.has(key));
+}
+
 // Get cached blog posts from localStorage
 function getCachedBlogPosts() {
   if (typeof window === "undefined") return null;
@@ -150,7 +160,7 @@ export async function apiRequest(path, options = {}) {
   const cacheKey = `${method}:${url}:${token}`;
   
   // Special handling for blog posts with localStorage cache
-  if (method === "GET" && !skipCache && path.includes("blog-posts") && path.includes("status=published")) {
+  if (method === "GET" && !skipCache && shouldUseBlogPostsCache(path)) {
     const cachedPosts = getCachedBlogPosts();
     if (cachedPosts) {
       console.log("Returning cached blog posts from localStorage");
@@ -197,6 +207,24 @@ export async function apiRequest(path, options = {}) {
       const error = new Error(message);
       error.status = response.status;
       error.payload = payload;
+
+      if (
+        typeof window !== "undefined" &&
+        response.status === 403 &&
+        payload?.message === "You have been banned from this server."
+      ) {
+        localStorage.removeItem("auth_token");
+        localStorage.removeItem("auth_user");
+        window.location.href = "/component/banned";
+      }
+      
+      // Handle Laravel validation errors specifically
+      if (response.status === 422 && payload?.errors) {
+        error.errors = payload.errors;
+        // Create a more readable message from validation errors
+        const errorMessages = Object.values(payload.errors).flat();
+        error.message = errorMessages.join(', ');
+      }
       
       // Clear cache on error to prevent stale data
       if (requestCache.has(cacheKey)) {
@@ -207,7 +235,7 @@ export async function apiRequest(path, options = {}) {
     }
 
     // Cache blog posts in localStorage for faster subsequent loads
-    if (method === "GET" && path.includes("blog-posts") && path.includes("status=published") && payload) {
+    if (method === "GET" && shouldUseBlogPostsCache(path) && payload) {
       setCachedBlogPosts(payload);
     }
 

@@ -78,6 +78,12 @@ class AuthController extends Controller
             ], 401);
         }
 
+        if ($user->status === 'banned') {
+            return response()->json([
+                'message' => 'You have been banned from this server.'
+            ], 403);
+        }
+
         // Delete old tokens for this user (optional - for single session)
         // $user->tokens()->delete();
 

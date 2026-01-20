@@ -8,6 +8,8 @@ import { apiRequest, getAuthToken } from "../../lib/api";
 
 const statusFilters = [
   { value: "", label: "All Posts" },
+  { value: "review", label: "In Review" },
+  { value: "scheduled", label: "Scheduled" },
   { value: "published", label: "Published" },
   { value: "draft", label: "Drafts" },
   { value: "archived", label: "Archived" },
@@ -88,6 +90,8 @@ export default function MyBlogsPage() {
 
   const getStatusBadge = (status) => {
     const badges = {
+      review: "bg-blue-600/20 text-blue-300 border-blue-600/30",
+      scheduled: "bg-purple-600/20 text-purple-300 border-purple-600/30",
       published: "bg-emerald-600/20 text-emerald-300 border-emerald-600/30",
       draft: "bg-yellow-600/20 text-yellow-300 border-yellow-600/30",
       archived: "bg-slate-600/20 text-slate-300 border-slate-600/30",

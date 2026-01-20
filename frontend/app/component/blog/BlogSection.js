@@ -3,15 +3,16 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { apiRequest, getAuthToken, getAuthUser, getCachedBlogPosts } from "../../lib/api";
+import { apiRequest, getAuthToken, getCachedBlogPosts } from "../../lib/api";
+import { 
+  calculateReadingTime, 
+  formatReadingTime, 
+  formatDate, 
+  getUserInitials, 
+  resolveAvatarUrl 
+} from "../../lib/utils";
 
-const resolveAvatarUrl = (url) => {
-  if (!url) return "";
-  if (url.startsWith("http") || url.startsWith("blob:") || url.startsWith("data:")) {
-    return url;
-  }
-  return `http://localhost:8000${url}`;
-};
+
 
 export default function BlogSection() {
   const router = useRouter();
@@ -102,26 +103,7 @@ export default function BlogSection() {
 
   // Remove the old useEffect since we handle it in the new one above
 
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
-  };
 
-  const getUserInitials = (user) => {
-    if (!user) return "U";
-    const name = user.name || `${user.first_name || ''} ${user.last_name || ''}`.trim();
-    if (name) {
-      const parts = name.split(' ').filter(Boolean);
-      if (parts.length >= 2) {
-        return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-      }
-      return name.substring(0, 2).toUpperCase();
-    }
-    return "U";
-  };
 
   // Memoize the displayed posts to prevent unnecessary re-renders
   const displayedPosts = useMemo(() => posts.slice(0, 6), [posts]);
@@ -167,6 +149,12 @@ export default function BlogSection() {
       });
     }
   };
+
+  const handleCommentsClick = useCallback((event, slug) => {
+    event.preventDefault();
+    event.stopPropagation();
+    router.push(`/component/blog/${slug}#comments`);
+  }, [router]);
 
   if (isLoading) {
     return (
@@ -228,7 +216,11 @@ export default function BlogSection() {
                           </span>
                         )}
                         <span className="text-gray-600">
-                          {formatDate(post.published_at || post.created_at)}
+                          {formatDate(post.published_at || post.created_at, { year: 'numeric', month: 'short', day: 'numeric' })}
+                        </span>
+                        <span className="text-gray-500">•</span>
+                        <span className="text-gray-600">
+                          {formatReadingTime(calculateReadingTime(post.content))}
                         </span>
                       </div>
 
@@ -279,16 +271,16 @@ export default function BlogSection() {
                           </svg>
                           {post.views_count || 0} views
                         </span>
-                        <Link 
-                          href={`/component/blog/${post.slug}#comments`}
+                        <button
                           className="flex items-center gap-2 hover:text-emerald-600 transition-colors"
-                          onClick={(e) => e.stopPropagation()}
+                          onClick={(e) => handleCommentsClick(e, post.slug)}
+                          type="button"
                         >
                           <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h6m-6 4h4m-5 4l-4-4H6a2 2 0 01-2-2V6a2 2 0 012-2h12a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
                           </svg>
                           {post.comments_count || 0} comments
-                        </Link>
+                        </button>
                         <button
                           onClick={(e) => handleLikeToggle(e, post)}
                           disabled={likingPosts.has(post.id)}
