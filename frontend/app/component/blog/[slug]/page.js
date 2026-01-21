@@ -13,6 +13,52 @@ import {
   resolveAvatarUrl 
 } from "../../../lib/utils";
 
+const renderContentBlocks = (content) => {
+  if (!content) return null;
+  const blocks = content.split(/\n{2,}/);
+
+  return blocks.map((block, blockIndex) => {
+    const lines = block
+      .split(/\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    if (!lines.length) return null;
+
+    const isOrderedList = lines.every((line) => /^\d+\.\s+/.test(line));
+    const isUnorderedList = lines.every((line) => /^[-*]\s+/.test(line));
+
+    if (isOrderedList || isUnorderedList) {
+      const items = lines.map((line) =>
+        line.replace(isOrderedList ? /^\d+\.\s+/ : /^[-*]\s+/, "")
+      );
+      const ListTag = isOrderedList ? "ol" : "ul";
+
+      return (
+        <ListTag
+          key={`block-${blockIndex}`}
+          className={`ml-6 space-y-2 ${isOrderedList ? "list-decimal" : "list-disc"}`}
+        >
+          {items.map((item, itemIndex) => (
+            <li key={`block-${blockIndex}-item-${itemIndex}`}>{item}</li>
+          ))}
+        </ListTag>
+      );
+    }
+
+    return (
+      <p key={`block-${blockIndex}`} className="mb-4 last:mb-0">
+        {lines.map((line, lineIndex) => (
+          <span key={`block-${blockIndex}-line-${lineIndex}`}>
+            {line}
+            {lineIndex < lines.length - 1 ? <br /> : null}
+          </span>
+        ))}
+      </p>
+    );
+  });
+};
+
 
 
 export default function BlogPostPage() {
@@ -537,8 +583,8 @@ export default function BlogPostPage() {
 
           {/* Article Content */}
           <article className="prose prose-lg prose-gray max-w-none">
-            <div className="text-gray-700 leading-relaxed text-lg whitespace-pre-wrap font-light">
-              {post.content}
+            <div className="text-gray-700 leading-relaxed text-lg font-light">
+              {renderContentBlocks(post.content)}
             </div>
           </article>
 
