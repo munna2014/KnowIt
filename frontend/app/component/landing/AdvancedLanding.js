@@ -116,7 +116,7 @@ export default function AdvancedLanding() {
           
           {/* Enhanced Description */}
           <div className="mb-20 max-w-5xl mx-auto">
-            <p className="text-2xl md:text-3xl text-white/80 mb-6 leading-relaxed font-light">
+            <div className="text-2xl md:text-3xl text-white/80 mb-6 leading-relaxed font-light">
               Discover insights, share knowledge, and connect with a 
               <span className="relative inline-block">
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-cyan-400 to-teal-400 font-medium">
@@ -124,10 +124,10 @@ export default function AdvancedLanding() {
                 </span>
                 <div className="absolute bottom-0 left-0 w-full h-0.5 bg-gradient-to-r from-indigo-400 via-cyan-400 to-teal-400 animate-pulse"></div>
               </span>
-            </p>
-            <p className="text-lg text-white/60 max-w-3xl mx-auto">
+            </div>
+            <div className="text-lg text-white/60 max-w-3xl mx-auto">
               Join thousands of creators, thinkers, and learners in the most advanced knowledge-sharing platform
-            </p>
+            </div>
           </div>
           
           {/* Refined Feature Grid */}
