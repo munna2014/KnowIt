@@ -12,6 +12,7 @@ use App\Http\Controllers\AdminCategoryController;
 use App\Http\Controllers\AdminSettingsController;
 use App\Http\Controllers\AdminAuditLogController;
 use App\Http\Controllers\SimpleAdminController;
+use App\Http\Controllers\NotificationController;
 use Illuminate\Support\Facades\Route;
 
 // Public routes
@@ -43,6 +44,9 @@ Route::middleware(['auth:sanctum', 'not_banned'])->group(function () {
     Route::delete('/comments/{comment}', [CommentController::class, 'destroy']);
     Route::get('/blog-posts/{blogPost:slug}/like-status', [BlogPostLikeController::class, 'status']);
     Route::post('/blog-posts/{blogPost:slug}/like', [BlogPostLikeController::class, 'toggle']);
+
+    Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::post('/notifications/{id}/read', [NotificationController::class, 'markRead']);
 });
 
 // Admin routes

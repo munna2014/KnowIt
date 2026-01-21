@@ -30,6 +30,8 @@ export default function Navbar() {
       router.push("/component/landing");
     } else if (item === "My Blogs") {
       router.push("/component/my-blogs");
+    } else if (item === "Notification") {
+      router.push("/component/notification");
     }
   };
 

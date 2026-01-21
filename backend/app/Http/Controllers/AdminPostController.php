@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\AuditLog;
 use App\Models\BlogPost;
+use App\Models\Notification;
 use Illuminate\Http\Request;
 
 class AdminPostController extends Controller
@@ -187,6 +188,8 @@ class AdminPostController extends Controller
             'to' => $shouldSchedule ? 'scheduled' : 'published'
         ]);
 
+        $this->notifyPostStatus($post, $shouldSchedule ? 'scheduled' : 'published');
+
         return response()->json([
             'message' => 'Post approved successfully'
         ]);
@@ -209,6 +212,8 @@ class AdminPostController extends Controller
             'scheduled_at' => null
         ]);
 
+        $this->notifyPostStatus($post, 'rejected', $validated['rejection_reason']);
+
         return response()->json([
             'message' => 'Post rejected successfully'
         ]);
@@ -227,6 +232,29 @@ class AdminPostController extends Controller
             'target_type' => $targetType,
             'target_id' => $targetId,
             'metadata' => $metadata,
+        ]);
+    }
+
+    private function notifyPostStatus(BlogPost $post, string $status, ?string $reason = null): void
+    {
+        if (!$post->user_id) {
+            return;
+        }
+
+        $title = $status === 'rejected' ? 'Post rejected' : 'Post approved';
+        $message = $status === 'rejected'
+            ? "Your post \"{$post->title}\" was rejected. Reason: {$reason}"
+            : "Your post \"{$post->title}\" was approved.";
+
+        Notification::create([
+            'user_id' => $post->user_id,
+            'type' => 'post_status',
+            'title' => $title,
+            'message' => $message,
+            'data' => [
+                'post_id' => $post->id,
+                'status' => $status,
+            ],
         ]);
     }
 
