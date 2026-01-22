@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { apiRequest, clearAuthToken, getAuthUser } from "../lib/api";
+import { apiRequest, clearAuthToken, getAuthToken, getAuthUser } from "../lib/api";
 
 const navItems = ["Home", "My Blogs", "Networks", "Notification"];
 
@@ -18,6 +18,7 @@ export default function Navbar() {
   const [activeItem, setActiveItem] = useState(navItems[0]);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [user, setUser] = useState(null);
+  const [notificationCount, setNotificationCount] = useState(0);
   const [isMounted, setIsMounted] = useState(false);
   const mountedRef = useRef(true);
   const router = useRouter();
@@ -30,6 +31,8 @@ export default function Navbar() {
       router.push("/component/landing");
     } else if (item === "My Blogs") {
       router.push("/component/my-blogs");
+    } else if (item === "Notification") {
+      router.push("/component/notification");
     }
   };
 
@@ -41,6 +44,26 @@ export default function Navbar() {
     const currentUser = getAuthUser();
     console.log("Loading user in navbar:", currentUser?.email);
     setUser(currentUser);
+  }, []);
+
+  const loadNotificationCount = useCallback(async () => {
+    const token = getAuthToken();
+    if (!token) {
+      setNotificationCount(0);
+      return;
+    }
+
+    try {
+      const data = await apiRequest("notifications", { skipCache: true });
+      const unread = (data.notifications || []).filter((item) => !item.read_at).length;
+      if (mountedRef.current) {
+        setNotificationCount(unread);
+      }
+    } catch (error) {
+      if (mountedRef.current) {
+        setNotificationCount(0);
+      }
+    }
   }, []);
 
   const updateActiveItemFromPath = useCallback(() => {
@@ -104,6 +127,7 @@ export default function Navbar() {
     mountedRef.current = true;
     setIsMounted(true);
     loadUser();
+    loadNotificationCount();
     updateActiveItemFromPath(); // Set active item based on current route
 
     const handleStorageChange = () => {
@@ -121,12 +145,17 @@ export default function Navbar() {
     window.addEventListener("storage", handleStorageChange);
     window.addEventListener("userUpdated", handleUserUpdate);
 
+    const intervalId = window.setInterval(() => {
+      loadNotificationCount();
+    }, 30000);
+
     return () => {
       mountedRef.current = false;
       window.removeEventListener("storage", handleStorageChange);
       window.removeEventListener("userUpdated", handleUserUpdate);
+      window.clearInterval(intervalId);
     };
-  }, [loadUser, updateActiveItemFromPath]);
+  }, [loadUser, loadNotificationCount, updateActiveItemFromPath]);
 
   // Update active item when pathname changes
   useEffect(() => {
@@ -153,6 +182,7 @@ export default function Navbar() {
         <div className="hidden items-center gap-2 rounded-full bg-slate-100/80 px-2 py-1 text-xl font-semibold text-slate-600 lg:flex">
           {navItems.map((item) => {
             const isActive = item === activeItem;
+            const showBadge = item === "Notification" && notificationCount > 0;
 
             return (
               <button
@@ -165,7 +195,14 @@ export default function Navbar() {
                 type="button"
                 onClick={() => handleNavClick(item)}
               >
-                {item}
+                <span className="relative inline-flex items-center gap-2">
+                  {item}
+                  {showBadge && (
+                    <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-rose-500 px-1 text-xs font-semibold text-white">
+                      {notificationCount > 99 ? "99+" : notificationCount}
+                    </span>
+                  )}
+                </span>
               </button>
             );
           })}

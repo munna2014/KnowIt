@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
+import Reports from "./components/Reports";
 
 const DEFAULT_API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost/KnowIt/backend/public/api";
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
 const DHAKA_OFFSET_MINUTES = 6 * 60;
 
 function useStoredState(key, initialValue) {
@@ -705,6 +706,7 @@ export default function App() {
               { id: "posts", label: "Posts" },
               { id: "comments", label: "Comments" },
               { id: "users", label: "Users" },
+              { id: "reports", label: "Reports" },
               { id: "audit", label: "Audit Logs" }
             ].map((tab) => (
               <button
@@ -1055,6 +1057,10 @@ export default function App() {
             </div>
           )}
         </section>
+      )}
+
+      {token && !selectedPostId && activeTab === "reports" && (
+        <Reports />
       )}
 
       {token && !selectedPostId && activeTab === "audit" && (

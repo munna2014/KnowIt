@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Navbar from "../../Navbar";
 import SocialShare from "../SocialShare";
+import ReportModal from "../ReportModal";
 import { apiRequest, getAuthToken, getAuthUser } from "../../../lib/api";
 import { 
   formatDate, 
@@ -12,6 +13,52 @@ import {
   getUserInitials, 
   resolveAvatarUrl 
 } from "../../../lib/utils";
+
+const renderContentBlocks = (content) => {
+  if (!content) return null;
+  const blocks = content.split(/\n{2,}/);
+
+  return blocks.map((block, blockIndex) => {
+    const lines = block
+      .split(/\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    if (!lines.length) return null;
+
+    const isOrderedList = lines.every((line) => /^\d+\.\s+/.test(line));
+    const isUnorderedList = lines.every((line) => /^[-*]\s+/.test(line));
+
+    if (isOrderedList || isUnorderedList) {
+      const items = lines.map((line) =>
+        line.replace(isOrderedList ? /^\d+\.\s+/ : /^[-*]\s+/, "")
+      );
+      const ListTag = isOrderedList ? "ol" : "ul";
+
+      return (
+        <ListTag
+          key={`block-${blockIndex}`}
+          className={`ml-6 space-y-2 ${isOrderedList ? "list-decimal" : "list-disc"}`}
+        >
+          {items.map((item, itemIndex) => (
+            <li key={`block-${blockIndex}-item-${itemIndex}`}>{item}</li>
+          ))}
+        </ListTag>
+      );
+    }
+
+    return (
+      <p key={`block-${blockIndex}`} className="mb-4 last:mb-0">
+        {lines.map((line, lineIndex) => (
+          <span key={`block-${blockIndex}-line-${lineIndex}`}>
+            {line}
+            {lineIndex < lines.length - 1 ? <br /> : null}
+          </span>
+        ))}
+      </p>
+    );
+  });
+};
 
 
 
@@ -35,6 +82,8 @@ export default function BlogPostPage() {
   const [showCommentForm, setShowCommentForm] = useState(false);
   const [isLiking, setIsLiking] = useState(false);
   const [liked, setLiked] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [hasReported, setHasReported] = useState(false);
 
   useEffect(() => {
     const loadPost = async () => {
@@ -48,6 +97,7 @@ export default function BlogPostPage() {
         setPost(data.post);
         await loadComments(params.slug);
         await loadLikeStatus(params.slug);
+        await checkReportStatus(params.slug);
 
         // Load related posts by the same author
         const authorId = data.post?.user_id ?? data.post?.user?.id;
@@ -107,6 +157,24 @@ export default function BlogPostPage() {
       );
     } catch (err) {
       console.error("Error loading like status:", err);
+    }
+  };
+
+  const checkReportStatus = async (slug) => {
+    const token = getAuthToken();
+    if (!token) return;
+    try {
+      // Check if user has already reported this post by getting their reports
+      const data = await apiRequest('reports');
+      const reports = data.reports || [];
+      const hasReportedPost = reports.some(report => 
+        report.blog_post?.slug === slug && report.status !== 'dismissed'
+      );
+      setHasReported(hasReportedPost);
+    } catch (err) {
+      console.error("Error checking report status:", err);
+      // Don't show error to user, just assume they haven't reported
+      setHasReported(false);
     }
   };
 
@@ -532,13 +600,32 @@ export default function BlogPostPage() {
                 </svg>
                 {post.post_likes_count || 0} likes
               </button>
+              
+              {/* Report Button - Only show if user is logged in and it's not their own post */}
+              {getAuthToken() && post.user_id !== getAuthUser()?.id && (
+                <button
+                  type="button"
+                  onClick={() => setShowReportModal(true)}
+                  disabled={hasReported}
+                  className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-base font-semibold transition no-print ${
+                    hasReported
+                      ? "border-gray-300 bg-gray-100 text-gray-500 cursor-not-allowed"
+                      : "border-red-200 bg-red-50 text-red-600 hover:border-red-300 hover:bg-red-100"
+                  }`}
+                >
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                  </svg>
+                  {hasReported ? "Reported" : "Report"}
+                </button>
+              )}
             </div>
           </div>
 
           {/* Article Content */}
           <article className="prose prose-lg prose-gray max-w-none">
-            <div className="text-gray-700 leading-relaxed text-lg whitespace-pre-wrap font-light">
-              {post.content}
+            <div className="text-gray-700 leading-relaxed text-lg font-light">
+              {renderContentBlocks(post.content)}
             </div>
           </article>
 
@@ -1004,6 +1091,17 @@ export default function BlogPostPage() {
           </div>
         </div>
       </div>
+
+      {/* Report Modal */}
+      <ReportModal
+        isOpen={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        post={post}
+        onReportSubmitted={() => {
+          setHasReported(true);
+          console.log("Report submitted successfully");
+        }}
+      />
     </div>
   );
 }

@@ -134,6 +134,6 @@ class CommentController extends Controller
             return 'spam';
         }
 
-        return 'pending';
+        return 'approved';
     }
 }
