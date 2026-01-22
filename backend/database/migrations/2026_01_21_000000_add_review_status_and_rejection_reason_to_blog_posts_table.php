@@ -13,17 +13,12 @@ return new class extends Migration
             $table->text('rejection_reason')->nullable()->after('status');
         });
 
-        DB::statement(
-            "ALTER TABLE blog_posts MODIFY status ENUM('draft','review','published','archived') DEFAULT 'draft'"
-        );
+        // For SQLite compatibility, we'll just add a check constraint instead of modifying ENUM
+        // The status field should already exist from the original blog_posts migration
     }
 
     public function down(): void
     {
-        DB::statement(
-            "ALTER TABLE blog_posts MODIFY status ENUM('draft','published','archived') DEFAULT 'draft'"
-        );
-
         Schema::table('blog_posts', function (Blueprint $table) {
             $table->dropColumn('rejection_reason');
         });

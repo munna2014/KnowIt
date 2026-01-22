@@ -32,7 +32,7 @@ export default function NotificationPage() {
     try {
       setIsLoading(true);
       setError("");
-      const data = await apiRequest("notifications");
+      const data = await apiRequest("notifications", { skipCache: true });
       setNotifications(data.notifications || []);
     } catch (err) {
       console.error("Error loading notifications:", err);
@@ -48,6 +48,8 @@ export default function NotificationPage() {
 
   const handleNotificationClick = useCallback(
     async (notification) => {
+      const postSlug = notification?.data?.post_slug;
+
       if (!notification?.read_at) {
         try {
           await apiRequest(`notifications/${notification.id}/read`, {
@@ -65,7 +67,11 @@ export default function NotificationPage() {
         }
       }
 
-      router.push("/component/my-blogs");
+      if (postSlug) {
+        router.push(`/component/blog/${postSlug}`);
+      } else {
+        router.push("/component/my-blogs");
+      }
     },
     [router]
   );

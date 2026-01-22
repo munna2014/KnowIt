@@ -253,6 +253,7 @@ class AdminPostController extends Controller
             'message' => $message,
             'data' => [
                 'post_id' => $post->id,
+                'post_slug' => $post->slug,
                 'status' => $status,
             ],
         ]);

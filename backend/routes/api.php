@@ -5,9 +5,11 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\BlogPostController;
 use App\Http\Controllers\CommentController;
 use App\Http\Controllers\BlogPostLikeController;
+use App\Http\Controllers\ReportController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AdminPostController;
 use App\Http\Controllers\AdminCommentController;
+use App\Http\Controllers\AdminReportController;
 use App\Http\Controllers\AdminCategoryController;
 use App\Http\Controllers\AdminSettingsController;
 use App\Http\Controllers\AdminAuditLogController;
@@ -47,6 +49,10 @@ Route::middleware(['auth:sanctum', 'not_banned'])->group(function () {
 
     Route::get('/notifications', [NotificationController::class, 'index']);
     Route::post('/notifications/{id}/read', [NotificationController::class, 'markRead']);
+    
+    // Report system
+    Route::get('/reports', [ReportController::class, 'index']);
+    Route::post('/blog-posts/{blogPost:slug}/report', [ReportController::class, 'store']);
 });
 
 // Admin routes
@@ -99,5 +105,10 @@ Route::prefix('admin')->group(function () {
 
         // Audit logs
         Route::get('/audit-logs', [AdminAuditLogController::class, 'index']);
+        
+        // Report management
+        Route::get('/reports', [AdminReportController::class, 'index']);
+        Route::get('/reports/stats', [AdminReportController::class, 'stats']);
+        Route::post('/reports/{report}/action', [AdminReportController::class, 'takeAction']);
     });
 });
